@@ -1,14 +1,14 @@
 # building
 
-We currently requires Python 3 and a recent version of OpenCascade to
-be installed on the system, under ArchLinux I can just do:
+I currently require Python 3 and a recent version of OpenCascade to be
+installed on the system, under ArchLinux I can just do:
 
 ```shell
 pacman -S python opencascade
 ```
 
 Currently this is just exploratory code, so am not providing full
-instructions for other distributions / OSs.
+instructions for other distributions / OSs yet.
 
 After this, I can do:
 

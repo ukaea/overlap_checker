@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	if (!all_ok) {
-		spdlog::critical("some shapes where not valid");
+		spdlog::critical("some shapes were not valid");
 		return 1;
 	}
 
