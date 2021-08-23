@@ -26,70 +26,70 @@
 
 template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
   // parse is inherited from formatter<string_view>.
-  template <typename FormatContext>
-  auto format(TopAbs_ShapeEnum c, FormatContext& ctx) {
-    string_view name = "unknown";
-    switch (c) {
-	case TopAbs_COMPOUND: name = "COMPOUND"; break;
-	case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
-	case TopAbs_SOLID: name = "SOLID"; break;
-	case TopAbs_SHELL: name = "SHELL"; break;
-	case TopAbs_FACE: name = "FACE"; break;
-	case TopAbs_WIRE: name = "WIRE"; break;
-	case TopAbs_EDGE: name = "EDGE"; break;
-	case TopAbs_VERTEX: name = "VERTEX"; break;
-	case TopAbs_SHAPE: name = "SHAPE"; break;
-    }
-    return formatter<string_view>::format(name, ctx);
-  }
+	template <typename FormatContext>
+	auto format(TopAbs_ShapeEnum c, FormatContext& ctx) {
+		string_view name = "unknown";
+		switch (c) {
+		case TopAbs_COMPOUND: name = "COMPOUND"; break;
+		case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
+		case TopAbs_SOLID: name = "SOLID"; break;
+		case TopAbs_SHELL: name = "SHELL"; break;
+		case TopAbs_FACE: name = "FACE"; break;
+		case TopAbs_WIRE: name = "WIRE"; break;
+		case TopAbs_EDGE: name = "EDGE"; break;
+		case TopAbs_VERTEX: name = "VERTEX"; break;
+		case TopAbs_SHAPE: name = "SHAPE"; break;
+		}
+		return formatter<string_view>::format(name, ctx);
+	}
 };
 
 template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
-  // parse is inherited from formatter<string_view>.
-  template <typename FormatContext>
-  auto format(BRepCheck_Status c, FormatContext& ctx) {
-    string_view name = "unknown";
-	switch(c) {
-	case BRepCheck_NoError: name = "NoError"; break;
-	case BRepCheck_InvalidPointOnCurve: name = "InvalidPointOnCurve"; break;
-	case BRepCheck_InvalidPointOnCurveOnSurface: name = "InvalidPointOnCurveOnSurface"; break;
-	case BRepCheck_InvalidPointOnSurface: name = "InvalidPointOnSurface"; break;
-	case BRepCheck_No3DCurve: name = "No3DCurve"; break;
-	case BRepCheck_Multiple3DCurve: name = "Multiple3DCurve"; break;
-	case BRepCheck_Invalid3DCurve: name = "Invalid3DCurve"; break;
-	case BRepCheck_NoCurveOnSurface: name = "NoCurveOnSurface"; break;
-	case BRepCheck_InvalidCurveOnSurface: name = "InvalidCurveOnSurface"; break;
-	case BRepCheck_InvalidCurveOnClosedSurface: name = "InvalidCurveOnClosedSurface"; break;
-	case BRepCheck_InvalidSameRangeFlag: name = "InvalidSameRangeFlag"; break;
-	case BRepCheck_InvalidSameParameterFlag: name = "InvalidSameParameterFlag"; break;
-	case BRepCheck_InvalidDegeneratedFlag: name = "InvalidDegeneratedFlag"; break;
-	case BRepCheck_FreeEdge: name = "FreeEdge"; break;
-	case BRepCheck_InvalidMultiConnexity: name = "InvalidMultiConnexity"; break;
-	case BRepCheck_InvalidRange: name = "InvalidRange"; break;
-	case BRepCheck_EmptyWire: name = "EmptyWire"; break;
-	case BRepCheck_RedundantEdge: name = "RedundantEdge"; break;
-	case BRepCheck_SelfIntersectingWire: name = "SelfIntersectingWire"; break;
-	case BRepCheck_NoSurface: name = "NoSurface"; break;
-	case BRepCheck_InvalidWire: name = "InvalidWire"; break;
-	case BRepCheck_RedundantWire: name = "RedundantWire"; break;
-	case BRepCheck_IntersectingWires: name = "IntersectingWires"; break;
-	case BRepCheck_InvalidImbricationOfWires: name = "InvalidImbricationOfWires"; break;
-	case BRepCheck_EmptyShell: name = "EmptyShell"; break;
-	case BRepCheck_RedundantFace: name = "RedundantFace"; break;
-	case BRepCheck_InvalidImbricationOfShells: name = "InvalidImbricationOfShells"; break;
-	case BRepCheck_UnorientableShape: name = "UnorientableShape"; break;
-	case BRepCheck_NotClosed: name = "NotClosed"; break;
-	case BRepCheck_NotConnected: name = "NotConnected"; break;
-	case BRepCheck_SubshapeNotInShape: name = "SubshapeNotInShape"; break;
-	case BRepCheck_BadOrientation: name = "BadOrientation"; break;
-	case BRepCheck_BadOrientationOfSubshape: name = "BadOrientationOfSubshape"; break;
-	case BRepCheck_InvalidPolygonOnTriangulation: name = "InvalidPolygonOnTriangulation"; break;
-	case BRepCheck_InvalidToleranceValue: name = "InvalidToleranceValue"; break;
-	case BRepCheck_EnclosedRegion: name = "EnclosedRegion"; break;
-	case BRepCheck_CheckFail: name = "CheckFail"; break;
-    }
-    return formatter<string_view>::format(name, ctx);
-  }
+	// parse is inherited from formatter<string_view>.
+	template <typename FormatContext>
+	auto format(BRepCheck_Status c, FormatContext& ctx) {
+		string_view name = "unknown";
+		switch(c) {
+		case BRepCheck_NoError: name = "NoError"; break;
+		case BRepCheck_InvalidPointOnCurve: name = "InvalidPointOnCurve"; break;
+		case BRepCheck_InvalidPointOnCurveOnSurface: name = "InvalidPointOnCurveOnSurface"; break;
+		case BRepCheck_InvalidPointOnSurface: name = "InvalidPointOnSurface"; break;
+		case BRepCheck_No3DCurve: name = "No3DCurve"; break;
+		case BRepCheck_Multiple3DCurve: name = "Multiple3DCurve"; break;
+		case BRepCheck_Invalid3DCurve: name = "Invalid3DCurve"; break;
+		case BRepCheck_NoCurveOnSurface: name = "NoCurveOnSurface"; break;
+		case BRepCheck_InvalidCurveOnSurface: name = "InvalidCurveOnSurface"; break;
+		case BRepCheck_InvalidCurveOnClosedSurface: name = "InvalidCurveOnClosedSurface"; break;
+		case BRepCheck_InvalidSameRangeFlag: name = "InvalidSameRangeFlag"; break;
+		case BRepCheck_InvalidSameParameterFlag: name = "InvalidSameParameterFlag"; break;
+		case BRepCheck_InvalidDegeneratedFlag: name = "InvalidDegeneratedFlag"; break;
+		case BRepCheck_FreeEdge: name = "FreeEdge"; break;
+		case BRepCheck_InvalidMultiConnexity: name = "InvalidMultiConnexity"; break;
+		case BRepCheck_InvalidRange: name = "InvalidRange"; break;
+		case BRepCheck_EmptyWire: name = "EmptyWire"; break;
+		case BRepCheck_RedundantEdge: name = "RedundantEdge"; break;
+		case BRepCheck_SelfIntersectingWire: name = "SelfIntersectingWire"; break;
+		case BRepCheck_NoSurface: name = "NoSurface"; break;
+		case BRepCheck_InvalidWire: name = "InvalidWire"; break;
+		case BRepCheck_RedundantWire: name = "RedundantWire"; break;
+		case BRepCheck_IntersectingWires: name = "IntersectingWires"; break;
+		case BRepCheck_InvalidImbricationOfWires: name = "InvalidImbricationOfWires"; break;
+		case BRepCheck_EmptyShell: name = "EmptyShell"; break;
+		case BRepCheck_RedundantFace: name = "RedundantFace"; break;
+		case BRepCheck_InvalidImbricationOfShells: name = "InvalidImbricationOfShells"; break;
+		case BRepCheck_UnorientableShape: name = "UnorientableShape"; break;
+		case BRepCheck_NotClosed: name = "NotClosed"; break;
+		case BRepCheck_NotConnected: name = "NotConnected"; break;
+		case BRepCheck_SubshapeNotInShape: name = "SubshapeNotInShape"; break;
+		case BRepCheck_BadOrientation: name = "BadOrientation"; break;
+		case BRepCheck_BadOrientationOfSubshape: name = "BadOrientationOfSubshape"; break;
+		case BRepCheck_InvalidPolygonOnTriangulation: name = "InvalidPolygonOnTriangulation"; break;
+		case BRepCheck_InvalidToleranceValue: name = "InvalidToleranceValue"; break;
+		case BRepCheck_EnclosedRegion: name = "EnclosedRegion"; break;
+		case BRepCheck_CheckFail: name = "CheckFail"; break;
+		}
+		return formatter<string_view>::format(name, ctx);
+	}
 };
 
 
@@ -228,12 +228,12 @@ is_shape_valid(const TopoDS_Shape& shape)
 
 int main(int argc, char **argv) {
 	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
-    spdlog::cfg::load_env_levels();
+	spdlog::cfg::load_env_levels();
 
 	if(argc != 1) {
 		fmt::print(stderr, "{} takes no arguments.\n", argv[0]);
-        return 1;
-    }
+		return 1;
+	}
 
 	const double toleranceThreshold = 0.1;
 
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
 	// searching for mySolids in the original code seems to have lots of
 	// relevant hits
 
-    /*
+	/*
 	** Geom::GeometryShapeChecker processor
 	*/
 	spdlog::debug("checking geometry");
@@ -305,7 +305,7 @@ int main(int argc, char **argv) {
 	// original code runs OccUtils::geometryProperty(shape) on every @shape.
 
 	// why?  just so that _metadata.json could be written out?
-    //
+	//
 	//  * hashes for later referencing material properties seems useful
 
 	/*
