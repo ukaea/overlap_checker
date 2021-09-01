@@ -16,7 +16,6 @@
 // mess of opencascade headers
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Iterator.hxx>
-#include <TDF_ChildIterator.hxx>
 
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>

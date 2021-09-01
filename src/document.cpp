@@ -3,7 +3,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include "TopAbs_ShapeEnum.hxx"
 #include "document.hpp"
 
 
@@ -13,6 +12,7 @@
 
 #include <STEPCAFControl_Reader.hxx>
 
+#include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 
 #include <BRepTools.hxx>
