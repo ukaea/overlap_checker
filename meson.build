@@ -2,6 +2,9 @@ project('parallel-preprocessor', 'cpp',
   version : '0.1',
   default_options : ['warning_level=3', 'cpp_std=c++17'])
 
+# opencascade preprocessor macros result in lots of these
+add_project_arguments('-Wno-extra-semi', language : 'cpp')
+
 config = configuration_data()
 cxx = meson.get_compiler('cpp')
 

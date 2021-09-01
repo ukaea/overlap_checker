@@ -1,7 +1,9 @@
+#include <cstdlib>
 #include <string>
 
 #include <spdlog/spdlog.h>
 
+#include "TopAbs_ShapeEnum.hxx"
 #include "document.hpp"
 
 
@@ -52,82 +54,8 @@ get_label_name(const TDF_Label &label)
 	return result;
 }
 
-bool
-document::load_brep_file(const char* path)
-{
-	BRep_Builder builder;
-	TopoDS_Shape shape;
-
-	spdlog::info("reading brep file {}", path);
-
-	if (!BRepTools::Read(shape, path, builder)) {
-		spdlog::critical("unable to read BREP file");
-		return false;
-	}
-
-	if (shape.ShapeType() != TopAbs_COMPSOLID) {
-		spdlog::critical("expected to get COMPSOLID toplevel shape from brep file");
-		return false;
-	}
-
-	spdlog::info("expecting {} toplevel shapes", shape.NbChildren());
-	solid_shapes.reserve(shape.NbChildren());
-
-	for (TopoDS_Iterator it(shape); it.More(); it.Next()) {
-		solid_shapes.push_back(it.Value());
-	}
-
-	return true;
-}
-
-bool
-document::load_step_file(const char* path)
-{
-	auto app = XCAFApp_Application::GetApplication();
-
-	STEPCAFControl_Reader reader;
-	reader.SetColorMode(true);
-	reader.SetNameMode(true);
-	reader.SetMatMode(true);
-
-	spdlog::info("reading step file {}", path);
-
-	if (reader.ReadFile(path) != IFSelect_RetDone) {
-		spdlog::critical("unable to ReadFile() on file");
-		return false;
-	}
-
-	spdlog::debug("transferring into doc");
-
-	Handle(TDocStd_Document) tdoc;
-	app->NewDocument(TCollection_ExtendedString("MDTV-CAF"), tdoc);
-	if (!reader.Transfer(tdoc)) {
-		spdlog::critical("failed to Transfer into document");
-		return false;
-	}
-
-	spdlog::debug("getting toplevel shapes");
-
-	TDF_LabelSequence toplevel;
-	XCAFDoc_DocumentTool::ShapeTool(tdoc->Main())->GetFreeShapes(toplevel);
-
-	spdlog::info("loading {} toplevel shape(s)", toplevel.Length());
-	for (const auto &label : toplevel) {
-		add_xcaf_shape(label);
-	}
-
-	return true;
-}
-
-void document::summary() {
-	spdlog::info(
-		"total shapes found solid={}, shell={}, compounds={}, others={}",
-		solid_shapes.size(), shell_shapes.size(), compound_shapes.size(), other_shapes.size());
-}
-
-
-void
-document::add_xcaf_shape(const TDF_Label &label, const int depth)
+static void
+add_xcaf_shape(document &doc,  const TDF_Label &label, const int depth=0)
 {
 	TopoDS_Shape shape;
 	if (!XCAFDoc_ShapeTool::GetShape(label, shape)) {
@@ -143,25 +71,25 @@ document::add_xcaf_shape(const TDF_Label &label, const int depth)
 
 	switch(shape.ShapeType()) {
 	case TopAbs_COMPOUND:
-		compound_shapes.push_back(shape);
+		doc.compound_shapes.push_back(shape);
 		break;
 	case TopAbs_COMPSOLID:
 	case TopAbs_SOLID:
-		solid_shapes.push_back(shape);
+		doc.solid_shapes.push_back(shape);
 		break;
 	case TopAbs_SHELL:
 		// PPP implicitly adds all shells to solids as well
-		shell_shapes.push_back(shape);
+		doc.shell_shapes.push_back(shape);
 		break;
 	default:
-		other_shapes.push_back(shape);
+		doc.other_shapes.push_back(shape);
 		break;
 	}
 
 	TDF_LabelSequence components;
 	XCAFDoc_ShapeTool::GetComponents(label, components);
 	for (auto const &comp : components) {
-		add_xcaf_shape(comp, depth+1);
+		add_xcaf_shape(doc, comp, depth+1);
 	}
 
 	// maybe also do this, but seems redundant given the above iterator
@@ -172,7 +100,88 @@ document::add_xcaf_shape(const TDF_Label &label, const int depth)
 	*/
 }
 
-bool
+static void
+summary(const document &doc) {
+	spdlog::info(
+		"total shapes found solid={}, shell={}, compounds={}, others={}",
+		doc.solid_shapes.size(), doc.shell_shapes.size(),
+		doc.compound_shapes.size(), doc.other_shapes.size());
+}
+
+void
+document::load_brep_file(const char* path)
+{
+	BRep_Builder builder;
+	TopoDS_Shape shape;
+
+	spdlog::info("reading brep file {}", path);
+
+	if (!BRepTools::Read(shape, path, builder)) {
+		spdlog::critical("unable to read BREP file");
+		std::abort();
+	}
+
+	if (shape.ShapeType() != TopAbs_COMPSOLID) {
+		spdlog::critical("expected to get COMPSOLID toplevel shape from brep file");
+		std::abort();
+	}
+
+	spdlog::debug("expecting {} solid shapes", shape.NbChildren());
+	solid_shapes.reserve(shape.NbChildren());
+
+	for (TopoDS_Iterator it(shape); it.More(); it.Next()) {
+		const auto &shp = it.Value();
+		if (shp.ShapeType() != TopAbs_SOLID) {
+			spdlog::critical("expecting shape to be a solid");
+			std::abort();
+		}
+
+		solid_shapes.push_back(shp);
+	}
+
+	summary(*this);
+}
+
+void
+document::load_step_file(const char* path)
+{
+	auto app = XCAFApp_Application::GetApplication();
+
+	STEPCAFControl_Reader reader;
+	reader.SetColorMode(true);
+	reader.SetNameMode(true);
+	reader.SetMatMode(true);
+
+	spdlog::info("reading step file {}", path);
+
+	if (reader.ReadFile(path) != IFSelect_RetDone) {
+		spdlog::critical("unable to ReadFile() on file");
+		std::abort();
+	}
+
+	spdlog::debug("transferring into doc");
+
+	Handle(TDocStd_Document) tdoc;
+	app->NewDocument(TCollection_ExtendedString("MDTV-CAF"), tdoc);
+	if (!reader.Transfer(tdoc)) {
+		spdlog::critical("failed to Transfer into document");
+		std::abort();
+	}
+
+	spdlog::debug("getting toplevel shapes");
+
+	TDF_LabelSequence toplevel;
+	XCAFDoc_DocumentTool::ShapeTool(tdoc->Main())->GetFreeShapes(toplevel);
+
+	spdlog::debug("loading {} toplevel shape(s)", toplevel.Length());
+	for (const auto &label : toplevel) {
+		add_xcaf_shape(*this, label);
+	}
+
+	summary(*this);
+}
+
+void
 document::write_brep_file(const char* path)
 {
 	spdlog::debug("building brep compsolid");
@@ -185,6 +194,9 @@ document::write_brep_file(const char* path)
 		builder.Add(merged, item);
 	}
 
-	spdlog::info("writing brep file");
-	return BRepTools::Write(merged, path);
+	spdlog::info("writing brep file {}", path);
+	if (!BRepTools::Write(merged, path)) {
+		spdlog::critical("failed to write brep file");
+		std::abort();
+	}
 }

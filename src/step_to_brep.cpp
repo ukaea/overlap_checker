@@ -11,17 +11,10 @@ main()
 
 	const char *inp = "../../data/mastu.stp";
 
-	spdlog::info("reading {}", inp);
-
 	document doc;
-	if (!doc.load_step_file(inp)) {
-		return 1;
-	}
-
-	doc.summary();
+	doc.load_step_file(inp);
 
 	const char *out = "mastu.brep";
-
 	doc.write_brep_file(out);
 
 	spdlog::debug("done");

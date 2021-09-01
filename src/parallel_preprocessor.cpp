@@ -190,10 +190,7 @@ int main(int argc, char **argv) {
 	const char *path = "mastu.brep";
 
 	document doc;
-	if (!doc.load_brep_file(path)) {
-		return 1;
-	}
-	doc.summary();
+	doc.load_brep_file(path);
 
 	// AFAICT: from this point only doc.solid_shapes is used by original code,
 	// searching for mySolids in the original code seems to have lots of
@@ -202,27 +199,34 @@ int main(int argc, char **argv) {
 	/*
 	** Geom::GeometryShapeChecker processor
 	*/
-	spdlog::debug("checking geometry");
-	bool all_ok = true;
-	for (const auto &shape : doc.solid_shapes) {
-		if (!is_shape_valid(shape)) {
-			all_ok = false;
+	if (false) {
+		spdlog::info("checking geometry");
+		bool all_ok = true;
+		for (const auto &shape : doc.solid_shapes) {
+			if (!is_shape_valid(shape)) {
+				all_ok = false;
+			}
 		}
-	}
-	if (!all_ok) {
-		spdlog::critical("some shapes were not valid");
-		return 1;
+		if (!all_ok) {
+			spdlog::critical("some shapes were not valid");
+			return 1;
+		}
 	}
 
 	/*
 	** Geom::GeometryPropertyBuilder processor
 	*/
-	spdlog::debug("caching geometry properties");
-	// original code runs OccUtils::geometryProperty(shape) on every @shape.
+	if (false) {
+		spdlog::info("caching geometry properties");
+		// original code runs OccUtils::geometryProperty(shape) on every @shape.
 
-	// why?  just so that _metadata.json could be written out?
-	//
-	//  * hashes for later referencing material properties seems useful
+		// why?  just so that _metadata.json could be written out?
+		//
+		//  * hashes for later referencing material properties seems useful
+
+		// is this just because the code was using the shape Explorer rather
+		// than Iterator, hence ordering could get weird
+	}
 
 	/*
 	** Geom::BoundBoxBuilder processor
