@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdlib>
 #include <vector>
 
@@ -18,6 +19,9 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepAlgoAPI_BuilderAlgo.hxx>
+
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
 
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
@@ -282,72 +286,82 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	// maintaining this is about twice as fast as using
-	// distance_between_shapes!
-	auto dss = BRepExtrema_DistShapeShape();
-	dss.SetFlag(Extrema_ExtFlag_MIN);
-
 	for (size_t hi = 1000; hi < doc.solid_shapes.size(); hi++) {
-		const auto& bbox_hi = bounding_boxes[hi];
-
-		dss.LoadS1(doc.solid_shapes[hi]);
-
 		for (size_t lo = 0; lo < hi; lo++) {
-			const auto& bbox_lo = bounding_boxes[lo];
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
-			if (are_bboxs_disjoint(bbox_hi, bbox_lo, imprint_clearance)) {
+			if (are_bboxs_disjoint(
+					bounding_boxes[hi], bounding_boxes[lo], imprint_clearance)) {
 				continue;
 			}
 
-			dss.LoadS2(doc.solid_shapes[lo]);
+			// original code makes copies of shapes as they are modified,
+			// due a bug when using fuzzy fusing
+			// http://dev.opencascade.org/index.php?q=node/1056#comment-520
+			// this has been fixed since version 7.1 (~2017)
+			TopTools_ListOfShape shapes;
+			shapes.Append(doc.solid_shapes[hi]);
+			shapes.Append(doc.solid_shapes[lo]);
 
-			if (!dss.Perform()) {
+			BRepAlgoAPI_BuilderAlgo fuser;
+			fuser.SetNonDestructive(true);
+			fuser.SetRunParallel(false);
+			fuser.SetArguments(shapes);
+			fuser.SetFuzzyValue(imprint_tolerance);
+
+			fuser.Build();
+			if (!fuser.IsDone()) {
 				std::stringstream ss;
-				dss.Dump(ss);
-
-				spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed, dump = {}", ss.str());
+				fuser.DumpErrors(ss);
+				spdlog::critical("BRepAlgoAPI_BuilderAlgo::Build() failed, errors = {}", ss.str());
 				std::abort();
 			}
 
-			const double dist = dss.Value();
+			if (fuser.HasGenerated() || fuser.HasDeleted()) {
+				spdlog::critical(
+					"fuser has done something interesting between shapes {:4} and {:4}",
+					hi, lo);
 
-			spdlog::debug("{} <> {} = {}", hi, lo, dist);
+				spdlog::critical(
+					"fuser outputs:  mod={} gen={} del={}",
+					fuser.HasModified(), fuser.HasGenerated(), fuser.HasDeleted());
 
-			continue;
+				// let the debugger get involved!
+				std::abort();
+			}
 
-			if (dist > imprint_clearance) {
-				// bounding boxes overlapped, but objects aren't
+			if (!fuser.HasModified()) {
 				continue;
-			} else if (dist <= 0) {
-				TopTools_ListOfShape shapes;
+			}
 
-				// original code makes copies of shapes as they are modified,
-				// due a bug when using fuzzy fusing
-				// http://dev.opencascade.org/index.php?q=node/1056#comment-520
-				// this has been fixed since version 7.1 (~2017)
-				shapes.Append(doc.solid_shapes[hi]);
-				shapes.Append(doc.solid_shapes[lo]);
-
-				BRepAlgoAPI_BuilderAlgo fuser;
-
-                fuser.SetNonDestructive(true);
-				fuser.SetRunParallel(false);
-				fuser.SetArguments(shapes);
-                fuser.SetFuzzyValue(imprint_tolerance);
-
-				fuser.Build();
-
-				if (!fuser.IsDone()) {
-					std::stringstream ss;
-					fuser.DumpErrors(ss);
-					spdlog::critical("BRepAlgoAPI_BuilderAlgo::Build() failed, errors = {}", ss.str());
-					std::abort();
+			{
+				// add in imprint_tolerance to help with numerical stability
+				double
+					original_volume = imprint_tolerance,
+					fused_volume = imprint_tolerance;
+				for (const auto& s : shapes) {
+					GProp_GProps props;
+					BRepGProp::VolumeProperties(s, props);
+					original_volume += props.Mass();
 				}
 
-				spdlog::debug("fused");
-			} else {
-				// CollisionType::Clearance
+				{
+					GProp_GProps props;
+					BRepGProp::VolumeProperties(fuser.Shape(), props);
+					fused_volume += props.Mass();
+				}
+
+				const double ratio_change = fused_volume / original_volume - 1;
+
+				spdlog::info(
+					"volumes of {:4} + {:4} changed by {:.4} %",
+					hi, lo, 100 * ratio_change);
+
+				if (std::fabs(ratio_change) > imprint_max_overlapping_volume_ratio) {
+					spdlog::error(
+						"too much overlap between shapes {} and {}",
+						lo, hi);
+				}
 			}
 		}
 	}

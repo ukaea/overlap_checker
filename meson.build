@@ -38,6 +38,7 @@ deps += declare_dependency(
   dependencies : [
     cxx.find_library('TKBO'),
     cxx.find_library('TKBRep'),
+    cxx.find_library('TKG3d'),
     cxx.find_library('TKLCAF'),
     cxx.find_library('TKMath'),
     cxx.find_library('TKTopAlgo'),
