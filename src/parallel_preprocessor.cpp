@@ -6,6 +6,8 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/cfg/env.h>
 
+#include "document.hpp"
+
 // mess of opencascade headers
 #include <TDocStd_Document.hxx>
 #include <TDataStd_Name.hxx>
@@ -14,7 +16,11 @@
 #include <TDF_ChildIterator.hxx>
 
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepAlgoAPI_BuilderAlgo.hxx>
+
 #include <BRepBndLib.hxx>
+#include <Bnd_OBB.hxx>
 #include <Bnd_Box.hxx>
 
 #include <XCAFApp_Application.hxx>
@@ -24,8 +30,20 @@
 #include <STEPCAFControl_Reader.hxx>
 
 
-template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
+template <> struct fmt::formatter<Bnd_OBB>: formatter<string_view> {
   // parse is inherited from formatter<string_view>.
+	template <typename FormatContext>
+	auto format(Bnd_OBB obb, FormatContext& ctx) {
+		std::stringstream ss;
+		ss << '{';
+		obb.DumpJson(ss);
+		ss << '}';
+		return formatter<string_view>::format(ss.str(), ctx);
+	}
+};
+
+template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
+	// parse is inherited from formatter<string_view>.
 	template <typename FormatContext>
 	auto format(TopAbs_ShapeEnum c, FormatContext& ctx) {
 		string_view name = "unknown";
@@ -93,101 +111,7 @@ template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
 };
 
 
-std::string
-get_label_name(const TDF_Label &label)
-{
-	Handle(TDataStd_Name) name;
-
-	if (!label.FindAttribute(name->GetID(), name)) {
-		return {};
-	}
-
-	const auto &extstr = name->Get();
-
-	std::string result(extstr.LengthOfCString(), 0);
-	char * str = result.data();
-	size_t len = extstr.ToUTF8CString(str);
-
-	if (len > result.length()) {
-		spdlog::critical(
-			("potential memory corruption from utf8 string overflow. "
-			 "expected={} bytes got={}"),
-			result.length(), len);
-		std::abort();
-	} else if (len < result.length()) {
-		result.resize(len);
-	}
-
-	return result;
-}
-
-
-struct document {
-	std::vector<TopoDS_Shape> solid_shapes;
-	std::vector<TopoDS_Shape> shell_shapes;
-	std::vector<TopoDS_Shape> compound_shapes;
-	std::vector<TopoDS_Shape> other_shapes;
-
-	void summary();
-
-	void add_xcaf_shape(XCAFDoc_ShapeTool &shapetool, const TDF_Label &label, const int depth=0);
-};
-
-void document::summary() {
-	spdlog::info(
-		"total shapes found solid={}, shell={}, compounds={}, others={}",
-		solid_shapes.size(), shell_shapes.size(), compound_shapes.size(), other_shapes.size());
-}
-
-void
-document::add_xcaf_shape(XCAFDoc_ShapeTool &shapetool, const TDF_Label &label, const int depth)
-{
-	TopoDS_Shape shape;
-	if (!shapetool.GetShape(label, shape)) {
-		spdlog::error("unable to get shape {}", get_label_name(label));
-		return;
-	}
-
-	if (depth == 0) {
-		spdlog::debug("got {} name='{}'", shape.ShapeType(), get_label_name(label));
-	} else {
-		spdlog::debug("{:*>{}} {} name='{}'", "", depth*2, shape.ShapeType(), get_label_name(label));
-	}
-
-	// fmt::print("{}\n", get_label_name(label));
-
-	switch(shape.ShapeType()) {
-	case TopAbs_COMPOUND:
-		compound_shapes.push_back(shape);
-		break;
-	case TopAbs_COMPSOLID:
-	case TopAbs_SOLID:
-		solid_shapes.push_back(shape);
-		break;
-	case TopAbs_SHELL:
-		// PPP implicitly adds all shells to solids as well
-		shell_shapes.push_back(shape);
-		break;
-	default:
-		other_shapes.push_back(shape);
-		break;
-	}
-
-	TDF_LabelSequence components;
-	shapetool.GetComponents(label, components);
-	for (auto const &comp : components) {
-		add_xcaf_shape(shapetool, comp, depth+1);
-	}
-
-	// maybe also do this, but seems redundant with the above iterator
-	/*
-	for (TDF_ChildIterator it{label}; it.More(); it.Next()) {
-		add_xcaf_shape(shapetool, it.Value());
-	}
-	*/
-}
-
-bool
+static bool
 is_shape_valid(const TopoDS_Shape& shape)
 {
 	BRepCheck_Analyzer checker(shape);
@@ -226,6 +150,34 @@ is_shape_valid(const TopoDS_Shape& shape)
 	return false;
 }
 
+static bool
+are_bboxs_disjoint(const Bnd_OBB &b1, const Bnd_OBB& b2, double tolerance)
+{
+	if (tolerance > 0) {
+		Bnd_OBB e1{b1}, e2{b2};
+		e1.Enlarge(tolerance);
+		e2.Enlarge(tolerance);
+		return e1.IsOut(e2);
+	}
+	return b1.IsOut(b2);
+}
+
+static double
+distance_between_shapes(const TopoDS_Shape& s1, const TopoDS_Shape& s2)
+{
+	auto dss = BRepExtrema_DistShapeShape(s1, s2, Extrema_ExtFlag_MIN);
+
+	if (dss.Perform()) {
+		return dss.Value();
+	}
+
+	std::stringstream ss;
+	dss.Dump(ss);
+
+	spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed, dump = {}", ss.str());
+	std::abort();
+}
+
 int main(int argc, char **argv) {
 	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
 	spdlog::cfg::load_env_levels();
@@ -235,48 +187,12 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	const double toleranceThreshold = 0.1;
-
-	// const char *path = "../../data/mastu.stp";
-	const char *path = "../data/test_geometry.step";
-
-	auto app = XCAFApp_Application::GetApplication();
-
-	STEPCAFControl_Reader reader;
-	reader.SetColorMode(true);
-	reader.SetNameMode(true);
-	reader.SetMatMode(true);
-
-	spdlog::info("reading the input file");
-
-	if (reader.ReadFile(path) != IFSelect_RetDone) {
-		spdlog::critical("unable to ReadFile() on file");
-		return 1;
-	}
-
-	spdlog::debug("transferring into doc");
-
-	Handle(TDocStd_Document) tdoc;
-	app->NewDocument(TCollection_ExtendedString("MDTV-CAF"), tdoc);
-	if (!reader.Transfer(tdoc)) {
-		spdlog::critical("failed to Transfer into document");
-		return 1;
-	}
-
-	spdlog::debug("getting toplevel shapes");
-
-	Handle(XCAFDoc_ShapeTool) shapetool = XCAFDoc_DocumentTool::ShapeTool(tdoc->Main());
-
-	TDF_LabelSequence toplevel;
-	shapetool->GetFreeShapes(toplevel);
+	const char *path = "mastu.brep";
 
 	document doc;
-
-	spdlog::info("loading {} toplevel shape(s)", toplevel.Length());
-	for (const auto &label : toplevel) {
-		doc.add_xcaf_shape(*shapetool, label);
+	if (!doc.load_brep_file(path)) {
+		return 1;
 	}
-
 	doc.summary();
 
 	// AFAICT: from this point only doc.solid_shapes is used by original code,
@@ -310,33 +226,125 @@ int main(int argc, char **argv) {
 
 	/*
 	** Geom::BoundBoxBuilder processor
+	*
+	* just use Orientated Bounding Boxes for now, worry about compatibility
+	* later!
 	*/
-	spdlog::debug("calculating bounding boxes");
-	std::vector<Bnd_Box> bounding_boxes;
+	spdlog::debug("calculating orientated bounding boxes");
+	std::vector<Bnd_OBB> bounding_boxes;
 	bounding_boxes.reserve(doc.solid_shapes.size());
 	for (const auto &shape : doc.solid_shapes) {
-		Bnd_Box bbox;
-		bbox.SetGap(toleranceThreshold);
-		BRepBndLib::Add(shape, bbox);
-		bounding_boxes.push_back(bbox);
-
-		gp_Pnt mn = bbox.CornerMin(), mx = bbox.CornerMax();
-		spdlog::debug(
-			"bbox min=({},{},{}) max=({},{},{})",
-			mn.X(), mn.Y(), mn.Z(),
-			mx.X(), mx.Y(), mx.Z());
+		Bnd_OBB obb;
+		BRepBndLib::AddOBB(shape, obb);
+		bounding_boxes.push_back(obb);
 	}
 
-	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
+	/*
+	** Geom::GeometryImprinter
+	*/
+
+	// need more descriptive names for tolerance and clearance
+	const double
+		imprint_tolerance = 0.001,
+		imprint_clearance = 0.5,
+		imprint_max_overlapping_volume_ratio = 0.1;
+
+	if (imprint_tolerance <= 0) {
+		spdlog::critical(
+			"imprinting tolerance ({}) should be positive",
+			imprint_tolerance);
+		return 1;
+	}
+
+	if (imprint_clearance <= 0) {
+		spdlog::critical(
+			"imprinting clearance ({}) should be positive",
+			imprint_clearance);
+		return 1;
+	}
+
+	if (imprint_clearance <= imprint_tolerance) {
+		spdlog::critical(
+			"imprinting clearance ({}) should be larger than tolerance ({})",
+			imprint_clearance, imprint_tolerance);
+		return 1;
+	}
+
+	if (imprint_max_overlapping_volume_ratio <= 0 ||
+		imprint_max_overlapping_volume_ratio >= 1) {
+		spdlog::critical(
+			"imprinting max overlapping volume ratio ({}) should be in (0., 1.)",
+			imprint_max_overlapping_volume_ratio);
+		return 1;
+	}
+
+	// maintaining this is about twice as fast as using
+	// distance_between_shapes!
+	auto dss = BRepExtrema_DistShapeShape();
+	dss.SetFlag(Extrema_ExtFlag_MIN);
+
+	for (size_t hi = 1000; hi < doc.solid_shapes.size(); hi++) {
 		const auto& bbox_hi = bounding_boxes[hi];
+
+		dss.LoadS1(doc.solid_shapes[hi]);
+
 		for (size_t lo = 0; lo < hi; lo++) {
 			const auto& bbox_lo = bounding_boxes[lo];
-			if (bbox_hi.IsOut(bbox_lo) && bbox_lo.IsOut(bbox_hi)) {
+			// seems reasonable to assume majority of shapes aren't close to
+			// overlapping, so check with coarser limit first
+			if (are_bboxs_disjoint(bbox_hi, bbox_lo, imprint_clearance)) {
 				continue;
 			}
-			fmt::print("{} <> {}\n", hi, lo);
 
-			// 
+			dss.LoadS2(doc.solid_shapes[lo]);
+
+			if (!dss.Perform()) {
+				std::stringstream ss;
+				dss.Dump(ss);
+
+				spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed, dump = {}", ss.str());
+				std::abort();
+			}
+
+			const double dist = dss.Value();
+
+			spdlog::debug("{} <> {} = {}", hi, lo, dist);
+
+			continue;
+
+			if (dist > imprint_clearance) {
+				// bounding boxes overlapped, but objects aren't
+				continue;
+			} else if (dist <= 0) {
+				TopTools_ListOfShape shapes;
+
+				// original code makes copies of shapes as they are modified,
+				// due a bug when using fuzzy fusing
+				// http://dev.opencascade.org/index.php?q=node/1056#comment-520
+				// this has been fixed since version 7.1 (~2017)
+				shapes.Append(doc.solid_shapes[hi]);
+				shapes.Append(doc.solid_shapes[lo]);
+
+				BRepAlgoAPI_BuilderAlgo fuser;
+
+                fuser.SetNonDestructive(true);
+				fuser.SetRunParallel(false);
+				fuser.SetArguments(shapes);
+                fuser.SetFuzzyValue(imprint_tolerance);
+
+				fuser.Build();
+
+				if (!fuser.IsDone()) {
+					std::stringstream ss;
+					fuser.DumpErrors(ss);
+					spdlog::critical("BRepAlgoAPI_BuilderAlgo::Build() failed, errors = {}", ss.str());
+					std::abort();
+				}
+
+				spdlog::debug("fused");
+			} else {
+				// CollisionType::Clearance
+			}
 		}
 	}
 
