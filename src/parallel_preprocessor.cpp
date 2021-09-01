@@ -1,19 +1,21 @@
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 #include <vector>
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <fmt/ranges.h>
+
 #include <spdlog/spdlog.h>
+#include <spdlog/stopwatch.h>
+#include <spdlog/pattern_formatter.h>
 #include <spdlog/cfg/env.h>
 
 #include "document.hpp"
 
 // mess of opencascade headers
-#include <TDocStd_Document.hxx>
-#include <TDataStd_Name.hxx>
-
-#include <TopExp_Explorer.hxx>
+#include <TopoDS_Shape.hxx>
+#include <TopoDS_Iterator.hxx>
 #include <TDF_ChildIterator.hxx>
 
 #include <BRepCheck_Analyzer.hxx>
@@ -27,12 +29,29 @@
 #include <Bnd_OBB.hxx>
 #include <Bnd_Box.hxx>
 
-#include <XCAFApp_Application.hxx>
-#include <XCAFDoc_DocumentTool.hxx>
-#include <XCAFDoc_ShapeTool.hxx>
+class my_formatter_flag : public spdlog::custom_flag_formatter
+{
+    using clock = std::chrono::steady_clock;
+	using timepoint = std::chrono::time_point<clock>;
 
-#include <STEPCAFControl_Reader.hxx>
+    timepoint reference;
 
+public:
+	my_formatter_flag() : reference{clock::now()} {}
+	my_formatter_flag(timepoint ref) : reference{ref} {}
+
+	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override
+    {
+		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
+		auto txt = fmt::format("{:.3f}", elapsed.count());
+        dest.append(txt.data(), txt.data() + txt.size());
+    }
+
+    std::unique_ptr<custom_flag_formatter> clone() const override
+    {
+        return spdlog::details::make_unique<my_formatter_flag>(reference);
+    }
+};
 
 template <> struct fmt::formatter<Bnd_OBB>: formatter<string_view> {
   // parse is inherited from formatter<string_view>.
@@ -175,16 +194,21 @@ distance_between_shapes(const TopoDS_Shape& s1, const TopoDS_Shape& s2)
 		return dss.Value();
 	}
 
-	std::stringstream ss;
-	dss.Dump(ss);
+	spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed");
+	dss.Dump(std::cerr);
 
-	spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed, dump = {}", ss.str());
 	std::abort();
 }
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv)
+{
 	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
 	spdlog::cfg::load_env_levels();
+
+	auto formatter = std::make_unique<spdlog::pattern_formatter>();
+    formatter->add_flag<my_formatter_flag>('*').set_pattern("[%*] [%^%l%$] %v");
+    spdlog::set_formatter(std::move(formatter));
 
 	if(argc != 1) {
 		fmt::print(stderr, "{} takes no arguments.\n", argv[0]);
@@ -238,7 +262,7 @@ int main(int argc, char **argv) {
 	* just use Orientated Bounding Boxes for now, worry about compatibility
 	* later!
 	*/
-	spdlog::debug("calculating orientated bounding boxes");
+	spdlog::info("calculating orientated bounding boxes");
 	std::vector<Bnd_OBB> bounding_boxes;
 	bounding_boxes.reserve(doc.solid_shapes.size());
 	for (const auto &shape : doc.solid_shapes) {
@@ -250,6 +274,8 @@ int main(int argc, char **argv) {
 	/*
 	** Geom::GeometryImprinter
 	*/
+
+	spdlog::info("starting imprinting");
 
 	// need more descriptive names for tolerance and clearance
 	const double
@@ -286,7 +312,7 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	for (size_t hi = 1000; hi < doc.solid_shapes.size(); hi++) {
+	for (size_t hi = 1; hi < doc.solid_shapes.size() && hi < 100; hi++) {
 		for (size_t lo = 0; lo < hi; lo++) {
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
@@ -311,27 +337,32 @@ int main(int argc, char **argv) {
 
 			fuser.Build();
 			if (!fuser.IsDone()) {
-				std::stringstream ss;
-				fuser.DumpErrors(ss);
-				spdlog::critical("BRepAlgoAPI_BuilderAlgo::Build() failed, errors = {}", ss.str());
+				spdlog::critical("BRepAlgoAPI_BuilderAlgo::Build() failed");
+				fuser.DumpErrors(std::cerr);
 				std::abort();
 			}
 
-			if (fuser.HasGenerated() || fuser.HasDeleted()) {
+			if (fuser.HasDeleted()) {
 				spdlog::critical(
-					"fuser has done something interesting between shapes {:4} and {:4}",
+					"fuser has done something interesting between shapes {} and {}",
 					hi, lo);
 
 				spdlog::critical(
-					"fuser outputs:  mod={} gen={} del={}",
+					"fuser output  mod={} gen={} del={}",
 					fuser.HasModified(), fuser.HasGenerated(), fuser.HasDeleted());
 
 				// let the debugger get involved!
-				std::abort();
+				// std::abort();
 			}
 
-			if (!fuser.HasModified()) {
+			if (!fuser.HasModified() && !fuser.HasGenerated()) {
 				continue;
+			}
+
+			if (fuser.HasGenerated()) {
+				spdlog::debug("generated shapes for pair {} and {}", hi, lo);
+
+				fuser.History()->Dump(std::cerr);
 			}
 
 			{
@@ -354,7 +385,7 @@ int main(int argc, char **argv) {
 				const double ratio_change = fused_volume / original_volume - 1;
 
 				spdlog::info(
-					"volumes of {:4} + {:4} changed by {:.4} %",
+					"volumes of {} and {} change by {:.4} %",
 					hi, lo, 100 * ratio_change);
 
 				if (std::fabs(ratio_change) > imprint_max_overlapping_volume_ratio) {
