@@ -50,12 +50,16 @@ deps += declare_dependency(
   include_directories : ['/usr/include/opencascade'],
 )
 
-exe = executable('parallel_preprocessor', ['src/parallel_preprocessor.cpp', 'src/document.cpp'],
+executable('parallel_preprocessor', ['src/parallel_preprocessor.cpp', 'src/document.cpp'],
   dependencies : deps,
   install : true,
 )
 
-test('basic', exe)
+test_exe = executable('test_collisions', ['src/test_collisions.cpp'],
+  dependencies : deps,
+)
+
+test('basic', test_exe)
 
 executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp'],
   dependencies : deps,
