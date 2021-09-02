@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 #include <fmt/format.h>
@@ -17,9 +18,14 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Iterator.hxx>
 
+#include <TopoDS_Builder.hxx>
+#include <TopoDS_CompSolid.hxx>
+
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
-#include <BRepAlgoAPI_BuilderAlgo.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
+
+#include <BRepTools.hxx>
 
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
@@ -27,6 +33,42 @@
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
 #include <Bnd_Box.hxx>
+
+// trim from left
+static std::string& ltrim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
+{
+    s.erase(0, s.find_first_not_of(t));
+    return s;
+}
+
+// trim from right
+static std::string& rtrim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
+{
+    s.erase(s.find_last_not_of(t) + 1);
+    return s;
+}
+
+// trim from left & right
+static std::string& trim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
+{
+    return ltrim_inplace(rtrim_inplace(s, t), t);
+}
+
+// copying versions
+inline std::string ltrim(std::string s, const char* t = " \t\n\r\f\v")
+{
+    return ltrim_inplace(s, t);
+}
+
+inline std::string rtrim(std::string s, const char* t = " \t\n\r\f\v")
+{
+    return rtrim_inplace(s, t);
+}
+
+inline std::string trim(std::string s, const char* t = " \t\n\r\f\v")
+{
+    return trim_inplace(s, t);
+}
 
 class my_formatter_flag : public spdlog::custom_flag_formatter
 {
@@ -199,6 +241,14 @@ distance_between_shapes(const TopoDS_Shape& s1, const TopoDS_Shape& s2)
 	std::abort();
 }
 
+static double
+volume_of_shape(const TopoDS_Shape& shape)
+{
+	GProp_GProps props;
+	BRepGProp::VolumeProperties(shape, props);
+	return props.Mass();
+}
+
 int
 main(int argc, char **argv)
 {
@@ -219,6 +269,11 @@ main(int argc, char **argv)
 	document doc;
 	doc.load_brep_file(path);
 
+	// temporarily make testing a bit quicker
+	if (doc.solid_shapes.size() > 75) {
+		doc.solid_shapes.resize(75);
+	}
+
 	// AFAICT: from this point only doc.solid_shapes is used by original code,
 	// searching for mySolids in the original code seems to have lots of
 	// relevant hits
@@ -226,18 +281,16 @@ main(int argc, char **argv)
 	/*
 	** Geom::GeometryShapeChecker processor
 	*/
-	if (false) {
-		spdlog::info("checking geometry");
-		bool all_ok = true;
-		for (const auto &shape : doc.solid_shapes) {
-			if (!is_shape_valid(shape)) {
-				all_ok = false;
-			}
+	spdlog::info("checking geometry");
+	bool all_ok = true;
+	for (const auto &shape : doc.solid_shapes) {
+		if (!is_shape_valid(shape)) {
+			all_ok = false;
 		}
-		if (!all_ok) {
-			spdlog::critical("some shapes were not valid");
-			return 1;
-		}
+	}
+	if (!all_ok) {
+		spdlog::critical("some shapes were not valid");
+		return 1;
 	}
 
 	/*
@@ -278,7 +331,7 @@ main(int argc, char **argv)
 
 	// need more descriptive names for tolerance and clearance
 	const double
-		imprint_tolerance = 0.001,
+		imprint_tolerance = 0.1, // 0.001 is a good default, but larger value causes testable changes
 		imprint_clearance = 0.5,
 		imprint_max_overlapping_volume_ratio = 0.1;
 
@@ -311,7 +364,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	for (size_t hi = 1; hi < doc.solid_shapes.size() && hi < 100; hi++) {
+	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
 		for (size_t lo = 0; lo < hi; lo++) {
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
@@ -324,67 +377,50 @@ main(int argc, char **argv)
 			// due a bug when using fuzzy fusing
 			// http://dev.opencascade.org/index.php?q=node/1056#comment-520
 			// this has been fixed since version 7.1 (~2017)
-			TopTools_ListOfShape shapes;
-			shapes.Append(doc.solid_shapes[hi]);
-			shapes.Append(doc.solid_shapes[lo]);
-
-			BRepAlgoAPI_BuilderAlgo fuser;
+			BRepAlgoAPI_Fuse fuser{doc.solid_shapes[hi], doc.solid_shapes[lo]};
 			fuser.SetNonDestructive(true);
 			fuser.SetRunParallel(false);
-			fuser.SetArguments(shapes);
 			fuser.SetFuzzyValue(imprint_tolerance);
 
 			fuser.Build();
 			if (!fuser.IsDone()) {
-				spdlog::critical("BRepAlgoAPI_BuilderAlgo::Build() failed");
-				fuser.DumpErrors(std::cerr);
-				std::abort();
+				const auto tol2 = imprint_tolerance / 100;
+
+				{
+					std::stringstream ss;
+					fuser.DumpErrors(ss);
+					spdlog::warn(
+						"{} during BRepAlgoAPI_Fuse between ({}, {}) fuzzy={}, retrying with {}",
+						trim(ss.str()), hi, lo, fuser.FuzzyValue(), tol2);
+				}
+
+				fuser.SetFuzzyValue(tol2);
+				fuser.Build();
+				if (!fuser.IsDone()) {
+					std::stringstream ss;
+					fuser.DumpErrors(ss);
+					spdlog::critical("{} during BRepAlgoAPI_Fuse::Build", trim(ss.str()));
+					std::abort();
+				}
 			}
 
-			if (fuser.HasDeleted()) {
-				spdlog::critical(
-					"fuser has done something interesting between shapes {} and {}",
-					hi, lo);
-
-				spdlog::critical(
-					"fuser output  mod={} gen={} del={}",
-					fuser.HasModified(), fuser.HasGenerated(), fuser.HasDeleted());
-
-				// let the debugger get involved!
-				// std::abort();
-			}
-
-			if (!fuser.HasModified() && !fuser.HasGenerated()) {
+			// nothing has changed means no overlap and nothing to do later as well
+			if (!fuser.HasModified() && !fuser.HasGenerated() && !fuser.HasDeleted()) {
 				continue;
-			}
-
-			if (fuser.HasGenerated()) {
-				spdlog::debug("generated shapes for pair {} and {}", hi, lo);
-
-				fuser.History()->Dump(std::cerr);
 			}
 
 			{
 				// add in imprint_tolerance to help with numerical stability
-				double
-					original_volume = imprint_tolerance,
-					fused_volume = imprint_tolerance;
-				for (const auto& s : shapes) {
-					GProp_GProps props;
-					BRepGProp::VolumeProperties(s, props);
-					original_volume += props.Mass();
-				}
-
-				{
-					GProp_GProps props;
-					BRepGProp::VolumeProperties(fuser.Shape(), props);
-					fused_volume += props.Mass();
-				}
+				double original_volume = imprint_tolerance
+					+ volume_of_shape(doc.solid_shapes[hi])
+					+ volume_of_shape(doc.solid_shapes[lo]);
+				double fused_volume = imprint_tolerance
+					+ volume_of_shape(fuser.Shape());
 
 				const double ratio_change = fused_volume / original_volume - 1;
 
 				spdlog::info(
-					"volumes of {} and {} change by {:.4} %",
+					"volumes of {} and {} change by {:#.4g} %",
 					hi, lo, 100 * ratio_change);
 
 				if (std::fabs(ratio_change) > imprint_max_overlapping_volume_ratio) {
@@ -392,6 +428,14 @@ main(int argc, char **argv)
 						"too much overlap between shapes {} and {}",
 						lo, hi);
 				}
+			}
+
+			fuser.History()->Dump(std::cerr);
+
+			for (TopoDS_Iterator it(fuser.Shape()); it.More(); it.Next()) {
+				const auto &shp = it.Value();
+
+				spdlog::debug("component type={}", shp.ShapeType());
 			}
 		}
 	}
