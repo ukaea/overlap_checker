@@ -55,7 +55,7 @@ executable('parallel_preprocessor', ['src/parallel_preprocessor.cpp', 'src/docum
   install : true,
 )
 
-test_exe = executable('test_collisions', ['src/test_collisions.cpp'],
+test_exe = executable('test_collisions', ['src/test_collisions.cpp', 'src/document.cpp'],
   dependencies : deps,
 )
 
