@@ -27,9 +27,6 @@
 
 #include <BRepTools.hxx>
 
-#include <BRepGProp.hxx>
-#include <GProp_GProps.hxx>
-
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
 #include <Bnd_Box.hxx>
@@ -241,14 +238,6 @@ distance_between_shapes(const TopoDS_Shape& s1, const TopoDS_Shape& s2)
 	std::abort();
 }
 
-static double
-volume_of_shape(const TopoDS_Shape& shape)
-{
-	GProp_GProps props;
-	BRepGProp::VolumeProperties(shape, props);
-	return props.Mass();
-}
-
 int
 main(int argc, char **argv)
 {
@@ -404,11 +393,14 @@ main(int argc, char **argv)
 				}
 			}
 
-			// nothing has changed means no overlap and nothing to do later as well
-			if (!fuser.HasModified() && !fuser.HasGenerated() && !fuser.HasDeleted()) {
+			// if the fuser didn't have to modify the shapes to fuse them then
+			// they don't overlap and we won't have to do anything to merge
+			// them
+			if (is_trivial_union_fuse(fuser)) {
 				continue;
 			}
 
+			// make sure the ratio of their volumes doesn't change too much
 			{
 				// add in imprint_tolerance to help with numerical stability
 				double original_volume = imprint_tolerance
