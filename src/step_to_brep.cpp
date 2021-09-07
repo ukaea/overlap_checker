@@ -6,6 +6,10 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/cfg/env.h>
 
+#include <CLI/App.hpp>
+#include <CLI/Formatter.hpp>
+#include <CLI/Config.hpp>
+
 #include <XCAFApp_Application.hxx>
 #include <XCAFDoc.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
@@ -23,6 +27,7 @@
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 
+#include <TopExp_Explorer.hxx>
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_CompSolid.hxx>
@@ -144,10 +149,10 @@ class collector {
 	TopoDS_Builder builder;
 	TopoDS_CompSolid merged;
 
-	int n_compound, n_solid, n_shell, n_other;
+	int label_num, n_solid;
 
 public:
-	collector() : n_compound{0}, n_solid{0}, n_shell{0}, n_other{0} {
+	collector() : label_num{0}, n_solid{0} {
 		builder.MakeCompSolid(merged);
 	}
 
@@ -157,46 +162,41 @@ public:
 		std::string label_name{"unnammed"};
 		get_label_name(label, label_name);
 
+		std::string color;
+		std::string material_name{"unknown"};
+		double material_density = 0;
+
+		get_color_info(label, color);
+		get_material_info(label, material_name, material_density);
+
 		if (!XCAFDoc_ShapeTool::GetShape(label, shape)) {
 			spdlog::error("unable to get shape {}", label_name);
 			std::abort();
 		}
 
-		const auto stype = shape.ShapeType();
-		switch(stype) {
-		case TopAbs_COMPOUND: n_compound += 1; break;
-		case TopAbs_SOLID: n_solid += 1; break;
-		// PPP implicitly adds all shells to solids as well
-		case TopAbs_SHELL: n_shell += 1; break;
-		default: n_other += 1; break;
-		}
-
-		if (stype == TopAbs_SOLID) {
-			builder.Add(merged, shape);
-
-			std::string color;
-			std::string material_name{"unknown"};
-			double material_density = 0;
-
-			get_color_info(label, color);
-			get_material_info(label, material_name, material_density);
+		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
+			builder.Add(merged, ex.Current());
+			n_solid += 1;
 
 			fmt::print(
 				"{},{},{},{},{}\n",
-				n_solid, label_name, color, material_name, material_density);
+				label_num, label_name, color, material_name, material_density);
 		}
+
+		label_num += 1;
 
 		TDF_LabelSequence components;
 		XCAFDoc_ShapeTool::GetComponents(label, components);
 		for (auto const &comp : components) {
 			add_label(comp, depth+1);
 		}
+
 	}
 
 	void log_summary() {
 		spdlog::info(
-			"total shapes found solid={}, shell={}, compounds={}, others={}",
-			n_solid, n_shell, n_compound, n_other);
+			"loaded {} labels, resulting in {} solids",
+			label_num, n_solid);
 	}
 
 	void write_brep_file(const char *path) {
@@ -245,20 +245,28 @@ load_step_file(const char* path, collector &col) {
 }
 
 int
-main()
+main(int argc, char **argv)
 {
 	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
 	spdlog::cfg::load_env_levels();
 
-	const char *inp = "../../data/mastu.stp";
+    CLI::App app{"Convert STEP files to BREP format for preprocessor."};
+    std::string path_in, path_out;
+	app.add_option("input", path_in, "Path of the input file")
+		->required()
+		->option_text("file.step");
+	app.add_option("output", path_out, "Path of the output file")
+		->required()
+		->option_text("file.brep");
+
+	CLI11_PARSE(app, argc, argv);
 
 	collector doc;
-	load_step_file(inp, doc);
+	load_step_file(path_in.c_str(), doc);
 
 	doc.log_summary();
 
-	const char *out = "mastu.brep";
-	doc.write_brep_file(out);
+	doc.write_brep_file(path_out.c_str());
 
 	spdlog::debug("done");
 
