@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdlib>
 #include <string>
 
@@ -5,108 +6,45 @@
 
 #include "document.hpp"
 
-
-#include <XCAFApp_Application.hxx>
-#include <XCAFDoc_DocumentTool.hxx>
-#include <XCAFDoc_ShapeTool.hxx>
-
-#include <STEPCAFControl_Reader.hxx>
-
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
 
-#include <TDocStd_Document.hxx>
-#include <TDataStd_Name.hxx>
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
 
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_CompSolid.hxx>
 
 
-static std::string
-get_label_name(const TDF_Label &label)
+/** are floats close, i.e. approximately equal? due to floating point
+ * representation we have to care about a couple of types of error, relative
+ * and absolute.
+ */
+bool
+are_vals_close(const double a, const double b, const double drel, const double dabs)
 {
-	Handle(TDataStd_Name) name;
+	assert(drel >= 0);
+	assert(dabs >= 0);
+	assert(drel > 0 || dabs > 0);
 
-	if (!label.FindAttribute(TDataStd_Name::GetID(), name)) {
-		return {};
-	}
+	const auto mag = std::max(std::abs(a), std::abs(b));
 
-	const auto &extstr = name->Get();
-
-	std::string result(extstr.LengthOfCString(), 0);
-	char * str = result.data();
-	size_t len = extstr.ToUTF8CString(str);
-
-	if (len > result.length()) {
-		spdlog::critical(
-			("potential memory corruption from utf8 string overflow. "
-			 "expected={} bytes got={}"),
-			result.length(), len);
-		std::abort();
-	} else if (len < result.length()) {
-		result.resize(len);
-	}
-
-	return result;
+	return std::abs(b - a) < (drel * mag + dabs);
 }
 
-static void
-add_xcaf_shape(document &doc,  const TDF_Label &label, const int depth=0)
+double
+volume_of_shape(const TopoDS_Shape& shape)
 {
-	TopoDS_Shape shape;
-	if (!XCAFDoc_ShapeTool::GetShape(label, shape)) {
-		spdlog::error("unable to get shape {}", get_label_name(label));
-		return;
-	}
-
-	if (depth == 0) {
-		spdlog::debug("got {} name='{}'", shape.ShapeType(), get_label_name(label));
-	} else {
-		spdlog::debug("{:*>{}} {} name='{}'", "", depth*2, shape.ShapeType(), get_label_name(label));
-	}
-
-	switch(shape.ShapeType()) {
-	case TopAbs_COMPOUND:
-		doc.compound_shapes.push_back(shape);
-		break;
-	case TopAbs_COMPSOLID:
-	case TopAbs_SOLID:
-		doc.solid_shapes.push_back(shape);
-		break;
-	case TopAbs_SHELL:
-		// PPP implicitly adds all shells to solids as well
-		doc.shell_shapes.push_back(shape);
-		break;
-	default:
-		doc.other_shapes.push_back(shape);
-		break;
-	}
-
-	TDF_LabelSequence components;
-	XCAFDoc_ShapeTool::GetComponents(label, components);
-	for (auto const &comp : components) {
-		add_xcaf_shape(doc, comp, depth+1);
-	}
-
-	// maybe also do this, but seems redundant given the above iterator
-	/*
-	for (TDF_ChildIterator it{label}; it.More(); it.Next()) {
-		add_xcaf_shape(shapetool, it.Value());
-	}
-	*/
+	GProp_GProps props;
+	BRepGProp::VolumeProperties(shape, props);
+	return props.Mass();
 }
 
-static void
-summary(const document &doc) {
-	spdlog::info(
-		"total shapes found solid={}, shell={}, compounds={}, others={}",
-		doc.solid_shapes.size(), doc.shell_shapes.size(),
-		doc.compound_shapes.size(), doc.other_shapes.size());
-}
 
 void
 document::load_brep_file(const char* path)
@@ -138,65 +76,69 @@ document::load_brep_file(const char* path)
 
 		solid_shapes.push_back(shp);
 	}
-
-	summary(*this);
 }
 
-void
-document::load_step_file(const char* path)
+
+/** determine whether a fuse operation did anything "interesting". i.e. does
+ * the result consist of anything more complicated than just the union of the
+ * two inputs?
+ */
+bool
+is_trivial_union_fuse(BRepAlgoAPI_Fuse& op)
 {
-	auto app = XCAFApp_Application::GetApplication();
+	assert(op.IsDone());
 
-	STEPCAFControl_Reader reader;
-	reader.SetColorMode(true);
-	reader.SetNameMode(true);
-	reader.SetMatMode(true);
+	/* we expect that fusing, i.e. taking the union, two non-overalapping
+	 * shapes to just return a new shape that just references the
+	 * original/input shapes
+	 */
 
-	spdlog::info("reading step file {}", path);
+	// unforunately this .Shape() isn't const
+	TopoDS_Iterator it{op.Shape()};
 
-	if (reader.ReadFile(path) != IFSelect_RetDone) {
-		spdlog::critical("unable to ReadFile() on file");
-		std::abort();
-	}
+	// a union should contain exactly two shapes
+	if (!it.More())
+		return false;
+	const TopoDS_Shape s1 = it.Value();
+	it.Next();
 
-	spdlog::debug("transferring into doc");
+	if (!it.More())
+		return false;
+	const TopoDS_Shape s2 = it.Value();
+	it.Next();
 
-	Handle(TDocStd_Document) tdoc;
-	app->NewDocument(TCollection_ExtendedString("MDTV-CAF"), tdoc);
-	if (!reader.Transfer(tdoc)) {
-		spdlog::critical("failed to Transfer into document");
-		std::abort();
-	}
+	// should be done now
+	if (it.More())
+		return false;
 
-	spdlog::debug("getting toplevel shapes");
-
-	TDF_LabelSequence toplevel;
-	XCAFDoc_DocumentTool::ShapeTool(tdoc->Main())->GetFreeShapes(toplevel);
-
-	spdlog::debug("loading {} toplevel shape(s)", toplevel.Length());
-	for (const auto &label : toplevel) {
-		add_xcaf_shape(*this, label);
-	}
-
-	summary(*this);
+	// make sure they are the same shapes
+	return (
+		(s1.IsEqual(op.Shape1()) && s2.IsEqual(op.Shape2())) ||
+		(s1.IsEqual(op.Shape2()) && s2.IsEqual(op.Shape1())));
 }
 
-void
-document::write_brep_file(const char* path)
+
+/** determine whether fusing resulted in one shape being "deleted" because it
+ * was enclosed within the other
+ *
+ * this just replicates existing PPP code, but doesn't seem so useful, as it
+ * would be good to know which one was the enclosing and which one was
+ * removed!
+ */
+bool
+is_enclosure_fuse(BRepAlgoAPI_Fuse& op)
 {
-	spdlog::debug("building brep compsolid");
+	assert(op.IsDone());
 
-	TopoDS_Builder builder;
-	TopoDS_CompSolid merged;
-	builder.MakeCompSolid(merged);
+	// previous PPP code just checks whether the volumes are the same! I think
+	// we should be doing something better, but ah well
+	const auto vol_s1 = volume_of_shape(op.Shape1());
+	const auto vol_s2 = volume_of_shape(op.Shape2());
+	const auto vol_res = volume_of_shape(op.Shape());
 
-	for (const auto& item : solid_shapes) {
-		builder.Add(merged, item);
-	}
+	const double drel = 1e-5;
 
-	spdlog::info("writing brep file {}", path);
-	if (!BRepTools::Write(merged, path)) {
-		spdlog::critical("failed to write brep file");
-		std::abort();
-	}
+	return (
+		are_vals_close(vol_res, vol_s1, drel) ||
+		are_vals_close(vol_res, vol_s2, drel));
 }
