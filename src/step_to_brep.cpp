@@ -127,17 +127,17 @@ get_material_info(const TDF_Label &label, std::string &name, double &density)
 	Handle(TDataStd_TreeNode) node;
 	Handle(XCAFDoc_Material) attr;
 
-	if (!label.FindAttribute(XCAFDoc::MaterialRefGUID(), node) ||
-		!node->HasFather() ||
-		!node->Father()->Label().FindAttribute(XCAFDoc_Material::GetID(), attr))
+	if (label.FindAttribute(XCAFDoc::MaterialRefGUID(), node) &&
+		node->HasFather() &&
+		node->Father()->Label().FindAttribute(XCAFDoc_Material::GetID(), attr))
 	{
-		return false;
+		assign_cstring(name, attr->GetName());
+		density = attr->GetDensity();
+
+		return true;
 	}
 
-	assign_cstring(name, attr->GetName());
-	density = attr->GetDensity();
-
-	return true;
+	return false;
 }
 
 class collector {
