@@ -3,7 +3,7 @@ project('parallel-preprocessor', 'cpp',
   default_options : ['warning_level=3', 'cpp_std=c++17'])
 
 # opencascade preprocessor macros result in lots of these
-add_project_arguments('-Wno-extra-semi', language : 'cpp')
+add_project_arguments(['-Wno-extra-semi', '-Wno-non-virtual-dtor'], language : 'cpp')
 
 config = configuration_data()
 cxx = meson.get_compiler('cpp')
@@ -50,16 +50,20 @@ deps += declare_dependency(
   include_directories : ['/usr/include/opencascade'],
 )
 
+exe = executable('playing', ['src/playing.cpp', 'src/document.cpp'],
+  dependencies : deps,
+)
+
+test('playing', exe)
+
 executable('parallel_preprocessor', ['src/parallel_preprocessor.cpp', 'src/document.cpp'],
   dependencies : deps,
   install : true,
 )
 
-test_exe = executable('test_collisions', ['src/test_collisions.cpp', 'src/document.cpp'],
+executable('test_collisions', ['src/test_collisions.cpp', 'src/document.cpp'],
   dependencies : deps,
 )
-
-test('basic', test_exe)
 
 executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp'],
   dependencies : deps,
