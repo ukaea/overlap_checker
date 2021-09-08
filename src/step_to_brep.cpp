@@ -174,6 +174,7 @@ public:
 			std::abort();
 		}
 
+		// add the solids to our list of things to do
 		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
 			builder.Add(merged, ex.Current());
 			n_solid += 1;
@@ -185,6 +186,7 @@ public:
 
 		label_num += 1;
 
+		// loop over other labelled parts
 		TDF_LabelSequence components;
 		XCAFDoc_ShapeTool::GetComponents(label, components);
 		for (auto const &comp : components) {
@@ -195,7 +197,7 @@ public:
 
 	void log_summary() {
 		spdlog::info(
-			"loaded {} labels, resulting in {} solids",
+			"enumerated {} labels, resulting in {} solids",
 			label_num, n_solid);
 	}
 
@@ -213,8 +215,8 @@ load_step_file(const char* path, collector &col) {
 	auto app = XCAFApp_Application::GetApplication();
 
 	STEPCAFControl_Reader reader;
-	reader.SetColorMode(true);
 	reader.SetNameMode(true);
+	reader.SetColorMode(true);
 	reader.SetMatMode(true);
 
 	spdlog::info("reading step file {}", path);
@@ -250,8 +252,8 @@ main(int argc, char **argv)
 	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
 	spdlog::cfg::load_env_levels();
 
-    CLI::App app{"Convert STEP files to BREP format for preprocessor."};
-    std::string path_in, path_out;
+	CLI::App app{"Convert STEP files to BREP format for preprocessor."};
+	std::string path_in, path_out;
 	app.add_option("input", path_in, "Path of the input file")
 		->required()
 		->option_text("file.step");

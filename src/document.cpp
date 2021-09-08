@@ -1,18 +1,22 @@
 #include <cmath>
 #include <cstdlib>
+#include <sstream>
 #include <string>
 
 #include <spdlog/spdlog.h>
 
+#include "BOPAlgo_Operation.hxx"
 #include "document.hpp"
 
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 
+#include <BOPAlgo_PaveFiller.hxx>
+#include <BRepAlgoAPI_Section.hxx>
+#include <BRepAlgoAPI_Common.hxx>
+
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
-#include <BRepAlgoAPI_Fuse.hxx>
-
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
 
@@ -78,67 +82,70 @@ document::load_brep_file(const char* path)
 	}
 }
 
-
-/** determine whether a fuse operation did anything "interesting". i.e. does
- * the result consist of anything more complicated than just the union of the
- * two inputs?
- */
-bool
-is_trivial_union_fuse(BRepAlgoAPI_Fuse& op)
+intersect_result classify_solid_intersection(
+	const TopoDS_Shape& shape1, const TopoDS_Shape& shape2, double fuzzy_value,
+	double &vol_common, double &vol_left, double &vol_right)
 {
+	// explicitly construct a PaveFiller so we can reuse the work between
+	// operations, at a minimum we want to perform sectioning and getting any
+	// common solid
+	BOPAlgo_PaveFiller filler;
+
+	{
+		TopTools_ListOfShape args;
+		args.Append(shape1);
+		args.Append(shape2);
+		filler.SetArguments(args);
+	}
+
+	filler.SetRunParallel(false);
+	filler.SetFuzzyValue(fuzzy_value);
+	filler.SetNonDestructive(true);
+
+	filler.Perform();
+
+	// how should this be returned!
+	assert(!filler.HasErrors());
+
+	// I'm only using the Section class because it has the most convinient
+	// constructor, the functionality mostly comes from
+	// BRepAlgoAPI_BooleanOperation and BRepAlgoAPI_BuilderAlgo (at the time
+	// of writing anyway!)
+	BRepAlgoAPI_Section op{shape1, shape2, filler, false};
+	op.SetOperation(BOPAlgo_COMMON);
+	op.SetFuzzyValue(fuzzy_value);
+	op.SetNonDestructive(true);
+	op.SetRunParallel(false);
+
+	op.Build();
 	assert(op.IsDone());
 
-	/* we expect that fusing, i.e. taking the union, two non-overalapping
-	 * shapes to just return a new shape that just references the
-	 * original/input shapes
-	 */
+	TopExp_Explorer ex;
+	ex.Init(op.Shape(), TopAbs_SOLID);
+	if (ex.More()) {
+		vol_common = volume_of_shape(op.Shape());
 
-	// unforunately this .Shape() isn't const
-	TopoDS_Iterator it{op.Shape()};
+		op.SetOperation(BOPAlgo_CUT);
+		op.Build();
+		assert(op.IsDone());
+		vol_left = volume_of_shape(op.Shape());
 
-	// a union should contain exactly two shapes
-	if (!it.More())
-		return false;
-	const TopoDS_Shape s1 = it.Value();
-	it.Next();
+		op.SetOperation(BOPAlgo_CUT21);
+		op.Build();
+		assert(op.IsDone());
+		vol_right = volume_of_shape(op.Shape());
 
-	if (!it.More())
-		return false;
-	const TopoDS_Shape s2 = it.Value();
-	it.Next();
+		return intersect_result::overlaps;
+	}
 
-	// should be done now
-	if (it.More())
-		return false;
-
-	// make sure they are the same shapes
-	return (
-		(s1.IsEqual(op.Shape1()) && s2.IsEqual(op.Shape2())) ||
-		(s1.IsEqual(op.Shape2()) && s2.IsEqual(op.Shape1())));
-}
-
-
-/** determine whether fusing resulted in one shape being "deleted" because it
- * was enclosed within the other
- *
- * this just replicates existing PPP code, but doesn't seem so useful, as it
- * would be good to know which one was the enclosing and which one was
- * removed!
- */
-bool
-is_enclosure_fuse(BRepAlgoAPI_Fuse& op)
-{
+	op.SetOperation(BOPAlgo_SECTION);
+	op.Build();
 	assert(op.IsDone());
 
-	// previous PPP code just checks whether the volumes are the same! I think
-	// we should be doing something better, but ah well
-	const auto vol_s1 = volume_of_shape(op.Shape1());
-	const auto vol_s2 = volume_of_shape(op.Shape2());
-	const auto vol_res = volume_of_shape(op.Shape());
+	ex.Init(op.Shape(), TopAbs_VERTEX);
+	if (ex.More()) {
+		return intersect_result::touches;
+	}
 
-	const double drel = 1e-5;
-
-	return (
-		are_vals_close(vol_res, vol_s1, drel) ||
-		are_vals_close(vol_res, vol_s2, drel));
+	return intersect_result::nothing;
 }

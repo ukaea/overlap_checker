@@ -17,5 +17,17 @@ struct document {
 };
 
 
-bool is_trivial_union_fuse(class BRepAlgoAPI_Fuse& op);
-bool is_enclosure_fuse(class BRepAlgoAPI_Fuse& op);
+// note that these are all subect to fuzzy tolerance
+enum class intersect_result {
+	nothing,
+
+	// at least one vertex, edge, or face touches
+	touches,
+
+	// there's some volume that overlaps
+	overlaps,
+};
+
+intersect_result classify_solid_intersection(
+	const TopoDS_Shape& shape1, const TopoDS_Shape& shape2, double fuzzy_value,
+	double &vol_common, double &vol_left, double &vol_right);
