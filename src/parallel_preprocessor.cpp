@@ -263,11 +263,6 @@ main(int argc, char **argv)
 	document doc;
 	doc.load_brep_file(path);
 
-	// temporarily make testing a bit quicker
-	if (doc.solid_shapes.size() > 200) {
-		doc.solid_shapes.resize(200);
-	}
-
 	// AFAICT: from this point only doc.solid_shapes is used by original code,
 	// searching for mySolids in the original code seems to have lots of
 	// relevant hits
@@ -330,7 +325,7 @@ main(int argc, char **argv)
 	// need more descriptive names for tolerance and clearance
 	const double
 		minimum_shape_volume = 1,
-		imprint_tolerance = 0.001, // 0.001 is a good default, but larger value causes testable changes
+		imprint_tolerance = 0.1, // 0.001 is a good default, but larger value causes testable changes
 		imprint_clearance = 0.5,
 		imprint_max_common_volume_ratio = 0.01;
 
@@ -363,7 +358,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
+	for (size_t hi = 0; hi < doc.solid_shapes.size(); hi++) {
 		if (volumes[hi] < minimum_shape_volume) {
 			spdlog::info(
 				"ignoring shape {} because it's too small, {} < {}",

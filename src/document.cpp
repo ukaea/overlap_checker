@@ -1,7 +1,3 @@
-#include <cmath>
-#include <cstdlib>
-#include <string>
-
 #ifdef INCLUDE_DOCTESTS
 #include <doctest/doctest.h>
 #endif
@@ -26,6 +22,8 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_CompSolid.hxx>
 
+#include <Message_Report.hxx>
+#include <Message_Gravity.hxx>
 
 #include "document.hpp"
 
@@ -109,6 +107,23 @@ intersect_result classify_solid_intersection(
 	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
 
+	if (filler.HasWarnings()) {
+		const Handle(Message_Report) report = filler.GetReport();
+
+		const auto
+			n_orig = report->GetAlerts(Message_Warning).Size();
+
+		filler.SetFuzzyValue(0);
+		filler.Perform();
+
+		const auto
+			n_new = report->GetAlerts(Message_Warning).Size();
+
+		spdlog::info(
+			"PaveFiller had warnings, fuzzy value set to {}, had counts={}, now={}",
+			filler.FuzzyValue(), n_orig, n_new);
+	}
+
 	// how should this be returned!
 	assert(!filler.HasErrors());
 
@@ -118,7 +133,7 @@ intersect_result classify_solid_intersection(
 	// of writing anyway!)
 	BRepAlgoAPI_Section op{shape, tool, filler, false};
 	op.SetOperation(BOPAlgo_COMMON);
-	op.SetFuzzyValue(fuzzy_value);
+	op.SetFuzzyValue(filler.FuzzyValue());
 	op.SetNonDestructive(true);
 	op.SetRunParallel(false);
 
