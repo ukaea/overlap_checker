@@ -8,19 +8,20 @@ add_project_arguments(['-Wno-extra-semi', '-Wno-non-virtual-dtor'], language : '
 config = configuration_data()
 cxx = meson.get_compiler('cpp')
 
-# key should match "Find*.cmake" file, values are package references
-conan_pkgs= {
-    'fmt': 'fmt/8.0.1',
-    'spdlog': 'spdlog/1.9.2',
-    'CLI11': 'cli11/2.0.0',
-}
+deps = [
+    dependency('Threads', method: 'cmake'),
+]
 
 conan = find_program('conan')
 conan_buildtype = config.get('buildtype', get_option('debug') ? 'Debug' : 'Release')
 
-deps=[
-    dependency('Threads', method: 'cmake'),
-]
+# key should match "Find*.cmake" file, values are package references
+conan_pkgs = {
+    'fmt': 'fmt/8.0.1',
+    'spdlog': 'spdlog/1.9.2',
+    'CLI11': 'cli11/2.0.0',
+    'doctest': 'doctest/2.4.6',
+}
 
 foreach pkg_name, conan_ref : conan_pkgs
     module_path = meson.current_build_dir() / 'conan-cmake' / pkg_name
@@ -50,19 +51,20 @@ deps += declare_dependency(
   include_directories : ['/usr/include/opencascade'],
 )
 
-exe = executable('playing', ['src/playing.cpp', 'src/document.cpp'],
+exe = executable('test_runner', ['src/test_runner.cpp', 'src/document.cpp'],
   dependencies : deps,
+  cpp_args : '-DINCLUDE_DOCTESTS',
 )
 
-test('playing', exe)
+test('test', exe)
+
+executable('playing', ['src/playing.cpp', 'src/document.cpp'],
+  dependencies : deps,
+)
 
 executable('parallel_preprocessor', ['src/parallel_preprocessor.cpp', 'src/document.cpp'],
   dependencies : deps,
   install : true,
-)
-
-executable('test_collisions', ['src/test_collisions.cpp', 'src/document.cpp'],
-  dependencies : deps,
 )
 
 executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp'],

@@ -19,13 +19,13 @@ struct document {
 
 // note that these are all subect to fuzzy tolerance
 enum class intersect_result {
-	nothing,
+	distinct,
 
 	// at least one vertex, edge, or face touches
-	touches,
+	touching,
 
 	// there's some volume that overlaps
-	overlaps,
+	overlap,
 };
 
 intersect_result classify_solid_intersection(

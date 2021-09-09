@@ -1,12 +1,14 @@
 #include <cmath>
 #include <cstdlib>
-#include <sstream>
 #include <string>
+
+#ifdef INCLUDE_DOCTESTS
+#include <doctest/doctest.h>
+#endif
 
 #include <spdlog/spdlog.h>
 
 #include "BOPAlgo_Operation.hxx"
-#include "document.hpp"
 
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
@@ -24,6 +26,8 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_CompSolid.hxx>
 
+
+#include "document.hpp"
 
 /** are floats close, i.e. approximately equal? due to floating point
  * representation we have to care about a couple of types of error, relative
@@ -135,7 +139,7 @@ intersect_result classify_solid_intersection(
 		assert(op.IsDone());
 		vol_right = volume_of_shape(op.Shape());
 
-		return intersect_result::overlaps;
+		return intersect_result::overlap;
 	}
 
 	op.SetOperation(BOPAlgo_SECTION);
@@ -144,8 +148,103 @@ intersect_result classify_solid_intersection(
 
 	ex.Init(op.Shape(), TopAbs_VERTEX);
 	if (ex.More()) {
-		return intersect_result::touches;
+		return intersect_result::touching;
 	}
 
-	return intersect_result::nothing;
+	return intersect_result::distinct;
 }
+
+#ifdef DOCTEST_LIBRARY_INCLUDED
+#include <BRepPrimAPI_MakeBox.hxx>
+
+static inline TopoDS_Shape
+cube_at(double x, double y, double z, double length)
+{
+	return BRepPrimAPI_MakeBox(gp_Pnt(x, y, z), length, length, length).Shape();
+}
+
+TEST_SUITE("testing classify_solid_intersection") {
+	TEST_CASE("two identical objects completely overlap") {
+		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
+
+		double vol_common = -1, vol_left = -1, vol_right = -1;
+		const auto result = classify_solid_intersection(
+			s1, s2, 0.5, vol_common, vol_left, vol_right);
+
+		REQUIRE_EQ(result, intersect_result::overlap);
+		CHECK_EQ(vol_common, doctest::Approx(10*10*10));
+		CHECK_EQ(vol_left, doctest::Approx(0));
+		CHECK_EQ(vol_right, doctest::Approx(0));
+	}
+
+	TEST_CASE("smaller object contained in larger one overlap") {
+		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(2, 2, 2, 6);
+
+		const double
+			v1 = 10*10*10,
+			v2 = 6*6*6;
+
+		double vol_common = -1, vol_left = -1, vol_right = -1;
+		const auto result = classify_solid_intersection(
+			s1, s2, 0.5, vol_common, vol_left, vol_right);
+
+		REQUIRE_EQ(result, intersect_result::overlap);
+		CHECK_EQ(vol_common, doctest::Approx(v2));
+		CHECK_EQ(vol_left, doctest::Approx(v1 - v2));
+		CHECK_EQ(vol_right, doctest::Approx(0));
+	}
+
+	TEST_CASE("distinct objects don't overlap") {
+		const auto s1 = cube_at(0, 0, 0, 4), s2 = cube_at(5, 5, 5, 4);
+
+		double vol_common = -1, vol_left = -1, vol_right = -1;
+		const auto result = classify_solid_intersection(
+			s1, s2, 0.5, vol_common, vol_left, vol_right);
+
+		REQUIRE_EQ(result, intersect_result::distinct);
+		WARN_EQ(vol_common, -1);
+		WARN_EQ(vol_left, -1);
+		WARN_EQ(vol_right, -1);
+	}
+
+	TEST_CASE("objects touching") {
+		int x = 0, y = 0, z = 0;
+
+		SUBCASE("vertex") { x = y = z = 5; }
+		SUBCASE("edge") { y = z = 5; }
+		SUBCASE("face") { z = 5; }
+
+		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(x, y, z, 5);
+
+		double vol_common = -1, vol_left = -1, vol_right = -1;
+		const auto result = classify_solid_intersection(
+			s1, s2, 0.5, vol_common, vol_left, vol_right);
+
+		REQUIRE_EQ(result, intersect_result::touching);
+	}
+
+	TEST_CASE("objects near fuzzy value") {
+		double z = 0;
+		auto expected = intersect_result::touching;
+
+		SUBCASE("overlap") {
+			z = 4.4;
+			expected = intersect_result::overlap;
+		}
+		SUBCASE("ok overlap") { z = 4.6; }
+		SUBCASE("ok gap") { z = 5.4; }
+		SUBCASE("distinct") {
+			z = 5.6;
+			expected = intersect_result::distinct;
+		}
+
+		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(0, 0, z, 5);
+
+		double vol_common = -1, vol_left = -1, vol_right = -1;
+		const auto result = classify_solid_intersection(
+			s1, s2, 0.5, vol_common, vol_left, vol_right);
+
+		REQUIRE_EQ(result, expected);
+	}
+}
+#endif
