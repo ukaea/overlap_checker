@@ -249,34 +249,34 @@ public:
 	}
 
 	bool next_input(worker_input &work) {
-        std::unique_lock<std::mutex> mlock(mutex);
+		std::unique_lock<std::mutex> mlock(mutex);
 
 		if (input.empty()) {
 			return false;
 		}
 
-        work = input.front();
+		work = input.front();
 		input.pop_front();
 
 		return true;
 	}
 
 	void add_output(const worker_output &work) {
-        std::unique_lock<std::mutex> mlock(mutex);
+		std::unique_lock<std::mutex> mlock(mutex);
 
-        output.push_back(work);
-        mlock.unlock();
+		output.push_back(work);
+		mlock.unlock();
 
 		cond.notify_one();
 	}
 
 	worker_output next_output() {
-        std::unique_lock<std::mutex> mlock(mutex);
-        while (output.empty()) {
-            cond.wait(mlock);
+		std::unique_lock<std::mutex> mlock(mutex);
+		while (output.empty()) {
+			cond.wait(mlock);
         }
 		auto result = output.front();
-        output.pop_front();
+		output.pop_front();
 		return result;
 	}
 };
