@@ -7,6 +7,7 @@
 bool are_vals_close(double a, double b, double drel=1e-10, double dabs=1e-13);
 
 double volume_of_shape(const class TopoDS_Shape& shape);
+double distance_between_shapes(const TopoDS_Shape& a, const TopoDS_Shape& b);
 
 struct document {
 	std::vector<TopoDS_Shape> solid_shapes;

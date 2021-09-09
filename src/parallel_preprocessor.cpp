@@ -1,40 +1,21 @@
-#include <cmath>
-#include <cstdlib>
-#include <iostream>
-#include <sstream>
-#include <vector>
+#include <string>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/cfg/env.h>
 #include <spdlog/stopwatch.h>
 #include <spdlog/pattern_formatter.h>
-#include <spdlog/cfg/env.h>
 
-#include "BOPAlgo_Operation.hxx"
-#include "BRepAlgoAPI_Algo.hxx"
-#include "BRepAlgoAPI_Common.hxx"
-#include "BRepAlgoAPI_Section.hxx"
-#include "document.hpp"
-
-// mess of opencascade headers
-#include <TopoDS_Shape.hxx>
 #include <TopoDS_Iterator.hxx>
-#include <TopExp_Explorer.hxx>
-
-#include <TopoDS_Builder.hxx>
-#include <TopoDS_CompSolid.hxx>
 
 #include <BRepCheck_Analyzer.hxx>
-#include <BRepExtrema_DistShapeShape.hxx>
-#include <BRepAlgoAPI_Fuse.hxx>
-
-#include <BRepTools.hxx>
 
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
-#include <Bnd_Box.hxx>
+
+#include "document.hpp"
 
 // trim from left
 static std::string& ltrim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
@@ -226,21 +207,6 @@ are_bboxs_disjoint(const Bnd_OBB &b1, const Bnd_OBB& b2, double tolerance)
 		return e1.IsOut(e2);
 	}
 	return b1.IsOut(b2);
-}
-
-static double
-distance_between_shapes(const TopoDS_Shape& s1, const TopoDS_Shape& s2)
-{
-	auto dss = BRepExtrema_DistShapeShape(s1, s2, Extrema_ExtFlag_MIN);
-
-	if (dss.Perform()) {
-		return dss.Value();
-	}
-
-	spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed");
-	dss.Dump(std::cerr);
-
-	std::abort();
 }
 
 int

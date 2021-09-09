@@ -4,17 +4,18 @@
 
 #include <spdlog/spdlog.h>
 
-#include "BOPAlgo_Operation.hxx"
+#include <BOPAlgo_PaveFiller.hxx>
+#include <BOPAlgo_Operation.hxx>
 
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 
-#include <BOPAlgo_PaveFiller.hxx>
+#include <BRepTools.hxx>
 #include <BRepAlgoAPI_Section.hxx>
 #include <BRepAlgoAPI_Common.hxx>
-
-#include <BRepTools.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRep_Builder.hxx>
+
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
 
@@ -51,6 +52,20 @@ volume_of_shape(const TopoDS_Shape& shape)
 	return props.Mass();
 }
 
+double
+distance_between_shapes(const TopoDS_Shape& a, const TopoDS_Shape& b)
+{
+	auto dss = BRepExtrema_DistShapeShape(a, b, Extrema_ExtFlag_MIN);
+
+	if (dss.Perform()) {
+		return dss.Value();
+	}
+
+	spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed");
+	dss.Dump(std::cerr);
+
+	std::abort();
+}
 
 void
 document::load_brep_file(const char* path)
