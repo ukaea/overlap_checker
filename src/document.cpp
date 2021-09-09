@@ -120,8 +120,8 @@ intersect_result classify_solid_intersection(
 			n_new = report->GetAlerts(Message_Warning).Size();
 
 		spdlog::info(
-			"PaveFiller had warnings, fuzzy value set to {}, had counts={}, now={}",
-			filler.FuzzyValue(), n_orig, n_new);
+			"PaveFiller had {} warnings, fuzzy value set to {} giving {} warnings",
+			n_orig, filler.FuzzyValue(), n_new);
 	}
 
 	// how should this be returned!

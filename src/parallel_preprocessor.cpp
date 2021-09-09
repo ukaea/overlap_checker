@@ -388,7 +388,7 @@ main(int argc, char **argv)
 				// and... we're done, next pair please!
 				continue;
 			case intersect_result::touching:
-				spdlog::debug("{:5}-{:<5} touch", hi, lo);
+				spdlog::info("{:5}-{:<5} touch", hi, lo);
 				break;
 			case intersect_result::overlap: {
 				const double
