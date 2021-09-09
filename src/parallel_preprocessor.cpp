@@ -1,4 +1,9 @@
 #include <string>
+#include <vector>
+#include <deque>
+#include <condition_variable>
+
+#include <pthread.h>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -16,6 +21,7 @@
 #include <Bnd_OBB.hxx>
 
 #include "document.hpp"
+
 
 // trim from left
 static std::string& ltrim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
@@ -209,6 +215,99 @@ are_bboxs_disjoint(const Bnd_OBB &b1, const Bnd_OBB& b2, double tolerance)
 	return b1.IsOut(b2);
 }
 
+struct worker_input {
+	size_t hi, lo;
+	double fuzzy_value;
+};
+
+struct worker_output {
+	size_t hi, lo;
+	intersect_result result;
+	double vol_common;
+	double vol_cut;
+	double vol_cut12;
+};
+
+class worker_queue {
+	std::mutex mutex;
+	std::condition_variable cond;
+
+	std::deque<worker_input> input;
+	std::deque<worker_output> output;
+
+public:
+	document &doc;
+
+	worker_queue(document &doc) : doc{doc} {}
+
+	size_t input_size() {
+		return input.size();
+	}
+
+	void add_work(const worker_input &work) {
+		input.push_back(work);
+	}
+
+	bool next_input(worker_input &work) {
+        std::unique_lock<std::mutex> mlock(mutex);
+
+		if (input.empty()) {
+			return false;
+		}
+
+        work = input.front();
+		input.pop_front();
+
+		return true;
+	}
+
+	void add_output(const worker_output &work) {
+        std::unique_lock<std::mutex> mlock(mutex);
+
+        output.push_back(work);
+        mlock.unlock();
+
+		cond.notify_one();
+	}
+
+	worker_output next_output() {
+        std::unique_lock<std::mutex> mlock(mutex);
+        while (output.empty()) {
+            cond.wait(mlock);
+        }
+		auto result = output.front();
+        output.pop_front();
+		return result;
+	}
+};
+
+static void *
+worker(void *param)
+{
+	spdlog::debug("worker thread starting");
+
+	worker_queue *queue = (worker_queue*)param;
+
+	const auto &shapes = queue->doc.solid_shapes;
+
+	worker_input input;
+	worker_output output;
+
+	while (queue->next_input(input)) {
+		output.result = classify_solid_intersection(
+			shapes[output.hi = input.hi],
+			shapes[output.lo = input.lo],
+			input.fuzzy_value,
+			output.vol_common, output.vol_cut, output.vol_cut12);
+
+		queue->add_output(output);
+	}
+
+	spdlog::debug("worker thread exiting");
+	return nullptr;
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -324,6 +423,8 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	worker_queue queue(doc);
+
 	for (size_t hi = 0; hi < doc.solid_shapes.size(); hi++) {
 		if (volumes[hi] < minimum_shape_volume) {
 			spdlog::info(
@@ -343,12 +444,29 @@ main(int argc, char **argv)
 				continue;
 			}
 
-			double vol_common, vol_cut, vol_cut12;
-			const auto result = classify_solid_intersection(
-				doc.solid_shapes[hi], doc.solid_shapes[lo], imprint_tolerance,
-				vol_common, vol_cut, vol_cut12);
+			worker_input work{hi, lo, imprint_tolerance};
+			queue.add_work(work);
+		}
+	}
 
-			switch (result) {
+	{
+		size_t remain = queue.input_size();
+
+		spdlog::debug("launching worker threads");
+		std::vector<pthread_t> threads;
+		for (int i = 0; i < 4; i++) {
+			pthread_t tid;
+			assert (pthread_create(&tid, NULL, worker, &queue) == 0);
+			threads.push_back(tid);
+		}
+		spdlog::debug("waiting for results from workers");
+
+		while (remain--) {
+			worker_output output = queue.next_output();
+
+			size_t hi = output.hi, lo = output.lo;
+
+			switch (output.result) {
 			case intersect_result::distinct:
 				spdlog::debug("{:5}-{:<5} are distinct", hi, lo);
 				// and... we're done, next pair please!
@@ -358,6 +476,7 @@ main(int argc, char **argv)
 				break;
 			case intersect_result::overlap: {
 				const double
+					vol_common = output.vol_common,
 					min_vol = std::min(volumes[hi], volumes[lo]),
 					max_overlap = min_vol * imprint_max_common_volume_ratio;
 
@@ -373,6 +492,12 @@ main(int argc, char **argv)
 				break;
 			}
 			}
+		}
+
+		spdlog::debug("joining worker threads");
+		for (const auto tid : threads) {
+			void *tmp;
+			assert(pthread_join(tid, &tmp) == 0);
 		}
 	}
 
