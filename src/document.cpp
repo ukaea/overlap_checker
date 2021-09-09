@@ -87,8 +87,8 @@ document::load_brep_file(const char* path)
 }
 
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape1, const TopoDS_Shape& shape2, double fuzzy_value,
-	double &vol_common, double &vol_left, double &vol_right)
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value,
+	double &vol_common, double &vol_cut, double &vol_cut12)
 {
 	// explicitly construct a PaveFiller so we can reuse the work between
 	// operations, at a minimum we want to perform sectioning and getting any
@@ -97,8 +97,8 @@ intersect_result classify_solid_intersection(
 
 	{
 		TopTools_ListOfShape args;
-		args.Append(shape1);
-		args.Append(shape2);
+		args.Append(shape);
+		args.Append(tool);
 		filler.SetArguments(args);
 	}
 
@@ -106,6 +106,7 @@ intersect_result classify_solid_intersection(
 	filler.SetFuzzyValue(fuzzy_value);
 	filler.SetNonDestructive(true);
 
+	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
 
 	// how should this be returned!
@@ -115,7 +116,7 @@ intersect_result classify_solid_intersection(
 	// constructor, the functionality mostly comes from
 	// BRepAlgoAPI_BooleanOperation and BRepAlgoAPI_BuilderAlgo (at the time
 	// of writing anyway!)
-	BRepAlgoAPI_Section op{shape1, shape2, filler, false};
+	BRepAlgoAPI_Section op{shape, tool, filler, false};
 	op.SetOperation(BOPAlgo_COMMON);
 	op.SetFuzzyValue(fuzzy_value);
 	op.SetNonDestructive(true);
@@ -132,12 +133,12 @@ intersect_result classify_solid_intersection(
 		op.SetOperation(BOPAlgo_CUT);
 		op.Build();
 		assert(op.IsDone());
-		vol_left = volume_of_shape(op.Shape());
+		vol_cut = volume_of_shape(op.Shape());
 
 		op.SetOperation(BOPAlgo_CUT21);
 		op.Build();
 		assert(op.IsDone());
-		vol_right = volume_of_shape(op.Shape());
+		vol_cut12 = volume_of_shape(op.Shape());
 
 		return intersect_result::overlap;
 	}

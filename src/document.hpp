@@ -29,5 +29,5 @@ enum class intersect_result {
 };
 
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape1, const TopoDS_Shape& shape2, double fuzzy_value,
-	double &vol_common, double &vol_left, double &vol_right);
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value,
+	double &vol_common, double &vol_cut, double &vol_cut12);
