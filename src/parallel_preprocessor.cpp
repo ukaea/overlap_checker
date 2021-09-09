@@ -12,11 +12,16 @@
 #include <spdlog/pattern_formatter.h>
 #include <spdlog/cfg/env.h>
 
+#include "BOPAlgo_Operation.hxx"
+#include "BRepAlgoAPI_Algo.hxx"
+#include "BRepAlgoAPI_Common.hxx"
+#include "BRepAlgoAPI_Section.hxx"
 #include "document.hpp"
 
 // mess of opencascade headers
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Iterator.hxx>
+#include <TopExp_Explorer.hxx>
 
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_CompSolid.hxx>
@@ -253,14 +258,14 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	const char *path = "mastu.brep";
+	const char *path = "input.brep";
 
 	document doc;
 	doc.load_brep_file(path);
 
 	// temporarily make testing a bit quicker
-	if (doc.solid_shapes.size() > 75) {
-		doc.solid_shapes.resize(75);
+	if (doc.solid_shapes.size() > 200) {
+		doc.solid_shapes.resize(200);
 	}
 
 	// AFAICT: from this point only doc.solid_shapes is used by original code,
@@ -303,13 +308,17 @@ main(int argc, char **argv)
 	* just use Orientated Bounding Boxes for now, worry about compatibility
 	* later!
 	*/
-	spdlog::info("calculating orientated bounding boxes");
+	spdlog::info("calculating shape information");
 	std::vector<Bnd_OBB> bounding_boxes;
+	std::vector<double> volumes;
 	bounding_boxes.reserve(doc.solid_shapes.size());
+	volumes.reserve(doc.solid_shapes.size());
 	for (const auto &shape : doc.solid_shapes) {
 		Bnd_OBB obb;
 		BRepBndLib::AddOBB(shape, obb);
 		bounding_boxes.push_back(obb);
+
+		volumes.push_back(volume_of_shape(shape));
 	}
 
 	/*
@@ -320,9 +329,10 @@ main(int argc, char **argv)
 
 	// need more descriptive names for tolerance and clearance
 	const double
-		imprint_tolerance = 0.1, // 0.001 is a good default, but larger value causes testable changes
+		minimum_shape_volume = 1,
+		imprint_tolerance = 0.001, // 0.001 is a good default, but larger value causes testable changes
 		imprint_clearance = 0.5,
-		imprint_max_overlapping_volume_ratio = 0.1;
+		imprint_max_common_volume_ratio = 0.01;
 
 	if (imprint_tolerance <= 0) {
 		spdlog::critical(
@@ -345,16 +355,26 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	if (imprint_max_overlapping_volume_ratio <= 0 ||
-		imprint_max_overlapping_volume_ratio >= 1) {
+	if (imprint_max_common_volume_ratio <= 0 ||
+		imprint_max_common_volume_ratio >= 1) {
 		spdlog::critical(
-			"imprinting max overlapping volume ratio ({}) should be in (0., 1.)",
-			imprint_max_overlapping_volume_ratio);
+			"imprinting max common volume ratio ({}) should be in (0., 1.)",
+			imprint_max_common_volume_ratio);
 		return 1;
 	}
 
 	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
+		if (volumes[hi] < minimum_shape_volume) {
+			spdlog::info(
+				"ignoring shape {} because it's too small, {} < {}",
+				hi, volumes[hi], minimum_shape_volume);
+			continue;
+		}
+
 		for (size_t lo = 0; lo < hi; lo++) {
+			if (volumes[lo] < minimum_shape_volume)
+				continue;
+
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
 			if (are_bboxs_disjoint(
@@ -362,72 +382,35 @@ main(int argc, char **argv)
 				continue;
 			}
 
-			// original code makes copies of shapes as they are modified,
-			// due a bug when using fuzzy fusing
-			// http://dev.opencascade.org/index.php?q=node/1056#comment-520
-			// this has been fixed since version 7.1 (~2017)
-			BRepAlgoAPI_Fuse fuser{doc.solid_shapes[hi], doc.solid_shapes[lo]};
-			fuser.SetNonDestructive(true);
-			fuser.SetRunParallel(false);
-			fuser.SetFuzzyValue(imprint_tolerance);
+			double vol_common, vol_cut, vol_cut12;
+			const auto result = classify_solid_intersection(
+				doc.solid_shapes[hi], doc.solid_shapes[lo], imprint_tolerance,
+				vol_common, vol_cut, vol_cut12);
 
-			fuser.Build();
-			if (!fuser.IsDone()) {
-				const auto tol2 = imprint_tolerance / 100;
-
-				{
-					std::stringstream ss;
-					fuser.DumpErrors(ss);
-					spdlog::warn(
-						"{} during BRepAlgoAPI_Fuse between ({}, {}) fuzzy={}, retrying with {}",
-						trim(ss.str()), hi, lo, fuser.FuzzyValue(), tol2);
-				}
-
-				fuser.SetFuzzyValue(tol2);
-				fuser.Build();
-				if (!fuser.IsDone()) {
-					std::stringstream ss;
-					fuser.DumpErrors(ss);
-					spdlog::critical("{} during BRepAlgoAPI_Fuse::Build", trim(ss.str()));
-					std::abort();
-				}
-			}
-
-			// if the fuser didn't have to modify the shapes to fuse them then
-			// they don't overlap and we won't have to do anything to merge
-			// them
-			if (is_trivial_union_fuse(fuser)) {
+			switch (result) {
+			case intersect_result::distinct:
+				spdlog::debug("{:5}-{:<5} are distinct", hi, lo);
+				// and... we're done, next pair please!
 				continue;
-			}
+			case intersect_result::touching:
+				spdlog::debug("{:5}-{:<5} touch", hi, lo);
+				break;
+			case intersect_result::overlap: {
+				const double
+					min_vol = std::min(volumes[hi], volumes[lo]),
+					max_overlap = min_vol * imprint_max_common_volume_ratio;
 
-			// make sure the ratio of their volumes doesn't change too much
-			{
-				// add in imprint_tolerance to help with numerical stability
-				double original_volume = imprint_tolerance
-					+ volume_of_shape(doc.solid_shapes[hi])
-					+ volume_of_shape(doc.solid_shapes[lo]);
-				double fused_volume = imprint_tolerance
-					+ volume_of_shape(fuser.Shape());
-
-				const double ratio_change = fused_volume / original_volume - 1;
-
-				spdlog::info(
-					"volumes of {} and {} change by {:#.4g} %",
-					hi, lo, 100 * ratio_change);
-
-				if (std::fabs(ratio_change) > imprint_max_overlapping_volume_ratio) {
-					spdlog::error(
-						"too much overlap between shapes {} and {}",
-						lo, hi);
+				if (vol_common > max_overlap) {
+					spdlog::warn(
+						"{:5}-{:<5} too much overlap ({:.2f}) between shapes ({:.2f}, {:.2f})",
+						hi, lo, vol_common, volumes[hi], volumes[lo]);
+				} else {
+					spdlog::info(
+						"{:5}-{:<5} overlap by an acceptable amount, {:.2f}% of smaller shape",
+						hi, lo, vol_common / min_vol * 100);
 				}
+				break;
 			}
-
-			fuser.History()->Dump(std::cerr);
-
-			for (TopoDS_Iterator it(fuser.Shape()); it.More(); it.Next()) {
-				const auto &shp = it.Value();
-
-				spdlog::debug("component type={}", shp.ShapeType());
 			}
 		}
 	}
