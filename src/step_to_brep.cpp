@@ -151,24 +151,17 @@ class collector {
 
 	int label_num, n_solid;
 
-public:
-	collector() : label_num{0}, n_solid{0} {
-		builder.MakeCompSolid(merged);
-	}
-
-	void add_label(const TDF_Label &label, const int depth) {
-		TopoDS_Shape shape;
-
-		std::string label_name{"unnammed"};
-		get_label_name(label, label_name);
-
+	void add_solids(const TDF_Label &label) {
 		std::string color;
+		std::string label_name{"unnammed"};
 		std::string material_name{"unknown"};
 		double material_density = 0;
 
+		get_label_name(label, label_name);
 		get_color_info(label, color);
 		get_material_info(label, material_name, material_density);
 
+		TopoDS_Shape shape;
 		if (!XCAFDoc_ShapeTool::GetShape(label, shape)) {
 			spdlog::error("unable to get shape {}", label_name);
 			std::abort();
@@ -183,16 +176,28 @@ public:
 				"{},{},{},{},{}\n",
 				label_num, label_name, color, material_name, material_density);
 		}
+	}
+
+public:
+	collector() : label_num{0}, n_solid{0} {
+		builder.MakeCompSolid(merged);
+	}
+
+	void add_label(XCAFDoc_ShapeTool &shapetool, const TDF_Label &label) {
+		TopoDS_Shape shape;
 
 		label_num += 1;
 
-		// loop over other labelled parts
-		TDF_LabelSequence components;
-		XCAFDoc_ShapeTool::GetComponents(label, components);
-		for (auto const &comp : components) {
-			add_label(comp, depth+1);
+		if (shapetool.IsAssembly(label)) {
+			// loop over other labelled parts
+			TDF_LabelSequence components;
+			XCAFDoc_ShapeTool::GetComponents(label, components);
+			for (auto const &comp : components) {
+				add_label(shapetool, comp);
+			}
+		} else {
+			add_solids(label);
 		}
-
 	}
 
 	void log_summary() {
@@ -238,11 +243,13 @@ load_step_file(const char* path, collector &col) {
 	spdlog::debug("getting toplevel shapes");
 
 	TDF_LabelSequence toplevel;
-	XCAFDoc_DocumentTool::ShapeTool(doc->Main())->GetFreeShapes(toplevel);
+	auto shapetool = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
+
+	shapetool->GetFreeShapes(toplevel);
 
 	spdlog::debug("loading {} toplevel shape(s)", toplevel.Length());
 	for (const auto &label : toplevel) {
-		col.add_label(label, 0);
+		col.add_label(*shapetool, label);
 	}
 }
 
