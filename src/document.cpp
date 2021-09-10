@@ -100,9 +100,20 @@ document::load_brep_file(const char* path)
 }
 
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value,
-	double &vol_common, double &vol_cut, double &vol_cut12)
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value)
 {
+	intersect_result result = {
+		intersect_status::failed,
+		// fuzzy value
+		0.0,
+
+		// number of warnings
+		0, 0, 0,
+
+		// volumes
+		-1.0, -1.0, -1.0,
+	};
+
 	// explicitly construct a PaveFiller so we can reuse the work between
 	// operations, at a minimum we want to perform sectioning and getting any
 	// common solid
@@ -122,25 +133,20 @@ intersect_result classify_solid_intersection(
 	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
 
-	if (filler.HasWarnings()) {
-		const Handle(Message_Report) report = filler.GetReport();
+	{
+		Handle(Message_Report) report = filler.GetReport();
 
-		const auto
-			n_orig = report->GetAlerts(Message_Warning).Size();
+		result.num_filler_warnings = report->GetAlerts(Message_Warning).Size();
 
-		filler.SetFuzzyValue(0);
-		filler.Perform();
-
-		const auto
-			n_new = report->GetAlerts(Message_Warning).Size();
-
-		spdlog::info(
-			"PaveFiller had {} warnings, fuzzy value set to {} giving {} warnings",
-			n_orig, filler.FuzzyValue(), n_new);
+		// this report is merged into the following reports
+		report->Clear();
 	}
 
-	// how should this be returned!
-	assert(!filler.HasErrors());
+	result.fuzzy_value = filler.FuzzyValue();
+
+	if (filler.HasErrors()) {
+		return result;
+	}
 
 	// I'm only using the Section class because it has the most convinient
 	// constructor, the functionality mostly comes from
@@ -148,41 +154,51 @@ intersect_result classify_solid_intersection(
 	// of writing anyway!)
 	BRepAlgoAPI_Section op{shape, tool, filler, false};
 	op.SetOperation(BOPAlgo_COMMON);
+	op.SetRunParallel(false);
 	op.SetFuzzyValue(filler.FuzzyValue());
 	op.SetNonDestructive(true);
-	op.SetRunParallel(false);
 
 	op.Build();
-	assert(op.IsDone());
+
+	result.num_common_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+
+	if (op.HasErrors()) {
+		return result;
+	}
 
 	TopExp_Explorer ex;
 	ex.Init(op.Shape(), TopAbs_SOLID);
 	if (ex.More()) {
-		vol_common = volume_of_shape(op.Shape());
+		result.vol_common = volume_of_shape(op.Shape());
 
 		op.SetOperation(BOPAlgo_CUT);
 		op.Build();
-		assert(op.IsDone());
-		vol_cut = volume_of_shape(op.Shape());
+		if (op.HasErrors()) {
+			return result;
+		}
+		result.vol_cut = volume_of_shape(op.Shape());
 
 		op.SetOperation(BOPAlgo_CUT21);
 		op.Build();
-		assert(op.IsDone());
-		vol_cut12 = volume_of_shape(op.Shape());
+		if (op.HasErrors()) {
+			return result;
+		}
+		result.vol_cut12 = volume_of_shape(op.Shape());
 
-		return intersect_result::overlap;
+		result.status = intersect_status::overlap;
+		return result;
 	}
 
 	op.SetOperation(BOPAlgo_SECTION);
 	op.Build();
-	assert(op.IsDone());
 
-	ex.Init(op.Shape(), TopAbs_VERTEX);
-	if (ex.More()) {
-		return intersect_result::touching;
+	result.num_section_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+	if (!op.HasErrors()) {
+		ex.Init(op.Shape(), TopAbs_VERTEX);
+		result.status = ex.More() ? intersect_status::touching : intersect_status::distinct;
 	}
 
-	return intersect_result::distinct;
+	return result;
 }
 
 #ifdef DOCTEST_LIBRARY_INCLUDED
@@ -198,14 +214,12 @@ TEST_SUITE("testing classify_solid_intersection") {
 	TEST_CASE("two identical objects completely overlap") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
-		double vol_common = -1, vol_left = -1, vol_right = -1;
-		const auto result = classify_solid_intersection(
-			s1, s2, 0.5, vol_common, vol_left, vol_right);
+		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result, intersect_result::overlap);
-		CHECK_EQ(vol_common, doctest::Approx(10*10*10));
-		CHECK_EQ(vol_left, doctest::Approx(0));
-		CHECK_EQ(vol_right, doctest::Approx(0));
+		REQUIRE_EQ(result.status, intersect_status::overlap);
+		CHECK_EQ(result.vol_common, doctest::Approx(10*10*10));
+		CHECK_EQ(result.vol_cut, doctest::Approx(0));
+		CHECK_EQ(result.vol_cut12, doctest::Approx(0));
 	}
 
 	TEST_CASE("smaller object contained in larger one overlap") {
@@ -215,27 +229,23 @@ TEST_SUITE("testing classify_solid_intersection") {
 			v1 = 10*10*10,
 			v2 = 6*6*6;
 
-		double vol_common = -1, vol_left = -1, vol_right = -1;
-		const auto result = classify_solid_intersection(
-			s1, s2, 0.5, vol_common, vol_left, vol_right);
+		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result, intersect_result::overlap);
-		CHECK_EQ(vol_common, doctest::Approx(v2));
-		CHECK_EQ(vol_left, doctest::Approx(v1 - v2));
-		CHECK_EQ(vol_right, doctest::Approx(0));
+		REQUIRE_EQ(result.status, intersect_status::overlap);
+		CHECK_EQ(result.vol_common, doctest::Approx(v2));
+		CHECK_EQ(result.vol_cut, doctest::Approx(v1 - v2));
+		CHECK_EQ(result.vol_cut12, doctest::Approx(0));
 	}
 
 	TEST_CASE("distinct objects don't overlap") {
 		const auto s1 = cube_at(0, 0, 0, 4), s2 = cube_at(5, 5, 5, 4);
 
-		double vol_common = -1, vol_left = -1, vol_right = -1;
-		const auto result = classify_solid_intersection(
-			s1, s2, 0.5, vol_common, vol_left, vol_right);
+		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result, intersect_result::distinct);
-		WARN_EQ(vol_common, -1);
-		WARN_EQ(vol_left, -1);
-		WARN_EQ(vol_right, -1);
+		REQUIRE_EQ(result.status, intersect_status::distinct);
+		WARN_EQ(result.vol_common, -1);
+		WARN_EQ(result.vol_cut, -1);
+		WARN_EQ(result.vol_cut12, -1);
 	}
 
 	TEST_CASE("objects touching") {
@@ -247,35 +257,32 @@ TEST_SUITE("testing classify_solid_intersection") {
 
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(x, y, z, 5);
 
-		double vol_common = -1, vol_left = -1, vol_right = -1;
-		const auto result = classify_solid_intersection(
-			s1, s2, 0.5, vol_common, vol_left, vol_right);
+		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result, intersect_result::touching);
+		REQUIRE_EQ(result.status, intersect_status::touching);
 	}
 
 	TEST_CASE("objects near fuzzy value") {
 		double z = 0;
-		auto expected = intersect_result::touching;
+		auto expected = intersect_status::touching;
 
 		SUBCASE("overlap") {
 			z = 4.4;
-			expected = intersect_result::overlap;
+			expected = intersect_status::overlap;
 		}
 		SUBCASE("ok overlap") { z = 4.6; }
 		SUBCASE("ok gap") { z = 5.4; }
 		SUBCASE("distinct") {
 			z = 5.6;
-			expected = intersect_result::distinct;
+			expected = intersect_status::distinct;
 		}
 
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(0, 0, z, 5);
 
-		double vol_common = -1, vol_left = -1, vol_right = -1;
-		const auto result = classify_solid_intersection(
-			s1, s2, 0.5, vol_common, vol_left, vol_right);
+		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result, expected);
+		REQUIRE_EQ(result.status, expected);
 	}
 }
 #endif
+

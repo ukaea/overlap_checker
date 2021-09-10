@@ -223,9 +223,6 @@ struct worker_input {
 struct worker_output {
 	size_t hi, lo;
 	intersect_result result;
-	double vol_common;
-	double vol_cut;
-	double vol_cut12;
 };
 
 class worker_queue {
@@ -274,7 +271,7 @@ public:
 		std::unique_lock<std::mutex> mlock(mutex);
 		while (output.empty()) {
 			cond.wait(mlock);
-        }
+		}
 		auto result = output.front();
 		output.pop_front();
 		return result;
@@ -294,11 +291,19 @@ worker(void *param)
 	worker_output output;
 
 	while (queue->next_input(input)) {
+		const auto &shape = shapes[output.hi = input.hi];
+		const auto &tool = shapes[output.lo = input.lo];
+
 		output.result = classify_solid_intersection(
-			shapes[output.hi = input.hi],
-			shapes[output.lo = input.lo],
-			input.fuzzy_value,
-			output.vol_common, output.vol_cut, output.vol_cut12);
+			shape, tool, input.fuzzy_value);
+
+		// try again with less fuzz
+		if (output.result.status == intersect_status::failed) {
+			spdlog::info(
+				"{:5}-{:<5} merge failed with ({} filler and {} common) warnings, retrying with less fuzzyness",
+				input.hi, input.lo, output.result.num_filler_warnings, output.result.num_common_warnings);
+			output.result = classify_solid_intersection(shape, tool, 0);
+		}
 
 		queue->add_output(output);
 	}
@@ -466,17 +471,20 @@ main(int argc, char **argv)
 
 			size_t hi = output.hi, lo = output.lo;
 
-			switch (output.result) {
-			case intersect_result::distinct:
+			switch (output.result.status) {
+			case intersect_status::failed:
+				spdlog::error("{:5}-{:<5} failed to merge");
+				continue;
+			case intersect_status::distinct:
 				spdlog::debug("{:5}-{:<5} are distinct", hi, lo);
 				// and... we're done, next pair please!
 				continue;
-			case intersect_result::touching:
+			case intersect_status::touching:
 				spdlog::info("{:5}-{:<5} touch", hi, lo);
 				break;
-			case intersect_result::overlap: {
+			case intersect_status::overlap: {
 				const double
-					vol_common = output.vol_common,
+					vol_common = output.result.vol_common,
 					min_vol = std::min(volumes[hi], volumes[lo]),
 					max_overlap = min_vol * imprint_max_common_volume_ratio;
 

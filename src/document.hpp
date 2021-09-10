@@ -19,7 +19,11 @@ struct document {
 
 
 // note that these are all subect to fuzzy tolerance
-enum class intersect_result {
+enum class intersect_status {
+	// something failed within OCC, different fuzzy values might help
+	failed,
+
+	// null intersection
 	distinct,
 
 	// at least one vertex, edge, or face touches
@@ -29,6 +33,18 @@ enum class intersect_result {
 	overlap,
 };
 
+struct intersect_result {
+	intersect_status status;
+
+	// requesting a fuzzy value of zero actually uses 1e-9 instead
+	double fuzzy_value;
+
+	// might want more than this later!
+	int num_filler_warnings, num_common_warnings, num_section_warnings;
+
+	// only valid if result == overlap
+	double vol_common, vol_cut, vol_cut12;
+};
+
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value,
-	double &vol_common, double &vol_cut, double &vol_cut12);
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value);
