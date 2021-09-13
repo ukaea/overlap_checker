@@ -2,9 +2,8 @@
 #include <cstdlib>
 #include <string>
 
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
-#include <spdlog/cfg/env.h>
 
 #include <CLI/App.hpp>
 #include <CLI/Formatter.hpp>
@@ -35,6 +34,7 @@
 #include <Quantity_Color.hxx>
 
 #include "document.hpp"
+#include "utils.hpp"
 
 template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
 	// parse is inherited from formatter<string_view>.
@@ -273,18 +273,20 @@ main(int argc, char **argv)
 {
 	configure_spdlog();
 
-	CLI::App app{"Convert STEP files to BREP format for preprocessor."};
 	std::string path_in, path_out;
 	double minimum_shape_volume = 1;
-	app.add_option("input", path_in, "Path of the input file")
-		->required()
-		->option_text("file.step");
-	app.add_option("output", path_out, "Path of the output file")
-		->required()
-		->option_text("file.brep");
-	app.add_option("--min-shape-vol,-v", minimum_shape_volume, "Minimum shape volume, in mm^3");
 
-	CLI11_PARSE(app, argc, argv);
+	{
+		CLI::App app{"Convert STEP files to BREP format for preprocessor."};
+		app.add_option("input", path_in, "Path of the input file")
+			->required()
+			->option_text("file.step");
+		app.add_option("output", path_out, "Path of the output file")
+			->required()
+			->option_text("file.brep");
+		app.add_option("--min-shape-vol,-v", minimum_shape_volume, "Minimum shape volume, in mm^3");
+		CLI11_PARSE(app, argc, argv);
+	}
 
 	collector doc(minimum_shape_volume);
 	load_step_file(path_in.c_str(), doc);

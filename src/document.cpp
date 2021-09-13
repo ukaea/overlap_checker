@@ -5,10 +5,6 @@
 #include <fmt/ranges.h>
 
 #include <spdlog/spdlog.h>
-#include <spdlog/cfg/env.h>
-#include <spdlog/stopwatch.h>
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <BOPAlgo_PaveFiller.hxx>
 #include <BOPAlgo_Operation.hxx>
@@ -86,62 +82,6 @@ template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
 		return formatter<string_view>::format(name, ctx);
 	}
 };
-
-// code to allow spdlog to print out elapsed time since process started
-class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
-{
-    using clock = std::chrono::steady_clock;
-	using timepoint = std::chrono::time_point<clock>;
-
-    timepoint reference;
-
-public:
-	time_elapsed_formatter_flag() : reference{clock::now()} {}
-	time_elapsed_formatter_flag(timepoint ref) : reference{ref} {}
-
-	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override {
-		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
-		auto txt = fmt::format("{:.3f}", elapsed.count());
-        dest.append(txt.data(), txt.data() + txt.size());
-    }
-
-    std::unique_ptr<custom_flag_formatter> clone() const override {
-        return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
-    }
-};
-
-void configure_spdlog()
-{
-	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
-	spdlog::cfg::load_env_levels();
-
-	auto formatter = std::make_unique<spdlog::pattern_formatter>();
-	formatter->add_flag<time_elapsed_formatter_flag>('*');
-	formatter->set_pattern("[%*] [%^%l%$] %v");
-    spdlog::set_formatter(std::move(formatter));
-
-    // Replace the default logger with a (color, single-threaded) stderr
-    // logger with name "" (but first replace it with an arbitrarily-named
-    // logger to prevent a name clash)
-    spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
-    spdlog::set_default_logger(spdlog::stderr_color_mt(""));
-}
-
-/** are floats close, i.e. approximately equal? due to floating point
- * representation we have to care about a couple of types of error, relative
- * and absolute.
- */
-bool
-are_vals_close(const double a, const double b, const double drel, const double dabs)
-{
-	assert(drel >= 0);
-	assert(dabs >= 0);
-	assert(drel > 0 || dabs > 0);
-
-	const auto mag = std::max(std::abs(a), std::abs(b));
-
-	return std::abs(b - a) < (drel * mag + dabs);
-}
 
 double
 volume_of_shape(const TopoDS_Shape& shape)

@@ -62,12 +62,17 @@ executable('playing', ['src/playing.cpp', 'src/document.cpp'],
   dependencies : deps,
 )
 
-executable('parallel_preprocessor', ['src/parallel_preprocessor.cpp', 'src/document.cpp'],
+executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp', 'src/utils.cpp'],
   dependencies : deps,
   install : true,
 )
 
-executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp'],
+executable('overlap_checker', ['src/overlap_checker.cpp', 'src/document.cpp', 'src/utils.cpp'],
+  dependencies : deps,
+  install : true,
+)
+
+executable('overlap_collecter', ['src/overlap_collecter.cpp', 'src/document.cpp', 'src/utils.cpp'],
   dependencies : deps,
   install : true,
 )

@@ -17,6 +17,7 @@
 #include <Bnd_OBB.hxx>
 
 #include "document.hpp"
+#include "utils.hpp"
 
 
 // helper methods to allow fmt to display some OCCT values nicely
@@ -162,7 +163,6 @@ main(int argc, char **argv)
 {
 	configure_spdlog();
 
-	CLI::App app{"Perform inprinting of BREP shapes."};
 	std::string path_in;
 	unsigned num_parallel = 4;
 	bool perform_geometry_checks{true};
@@ -171,27 +171,29 @@ main(int argc, char **argv)
 		imprint_tolerance = 0.001,
 		max_common_volume_ratio = 0.01;
 
-	app.add_option(
-		"input", path_in,
-		"Path of the input file")
-		->required()
-		->option_text("file.brep");
-	app.add_option(
-		"-j", num_parallel,
-		"Number of threads to parallelise over")
-		->option_text("jobs");
-	app.add_flag(
-		"--check-geometry,!--no-check-geometry",
-		perform_geometry_checks,
-		"Check overall validity of shapes");
-	app.add_option(
-		"--bbox-clearance", bbox_clearance,
-		"Bounding-boxes closer than this will be checked for overlaps");
-	app.add_option(
-		"--imprint-tolerance", imprint_tolerance,
-		"Faces, edges, and verticies will be merged when closer than this");
-
-	CLI11_PARSE(app, argc, argv);
+	{
+		CLI::App app{"Perform inprinting of BREP shapes."};
+		app.add_option(
+			"input", path_in,
+			"Path of the input file")
+			->required()
+			->option_text("file.brep");
+		app.add_option(
+			"-j", num_parallel,
+			"Number of threads to parallelise over")
+			->option_text("jobs");
+		app.add_flag(
+			"--check-geometry,!--no-check-geometry",
+			perform_geometry_checks,
+			"Check overall validity of shapes");
+		app.add_option(
+			"--bbox-clearance", bbox_clearance,
+			"Bounding-boxes closer than this will be checked for overlaps");
+		app.add_option(
+			"--imprint-tolerance", imprint_tolerance,
+			"Faces, edges, and verticies will be merged when closer than this");
+		CLI11_PARSE(app, argc, argv);
+	}
 
 	// make sure parameters are sane!
 	if (num_parallel > 1024) {
