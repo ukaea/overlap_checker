@@ -322,7 +322,6 @@ main(int argc, char **argv)
 
 	// need more descriptive names for tolerance and clearance
 	const double
-		minimum_shape_volume = 1,
 		imprint_tolerance = 0.1, // 0.001 is a good default, but larger value causes testable changes
 		imprint_clearance = 0.5,
 		imprint_max_common_volume_ratio = 0.01;
@@ -358,18 +357,8 @@ main(int argc, char **argv)
 
 	worker_queue queue;
 
-	for (size_t hi = 0; hi < doc.solid_shapes.size(); hi++) {
-		if (volumes[hi] < minimum_shape_volume) {
-			spdlog::info(
-				"ignoring shape {} because it's too small, {} < {}",
-				hi, volumes[hi], minimum_shape_volume);
-			continue;
-		}
-
+	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
 		for (size_t lo = 0; lo < hi; lo++) {
-			if (volumes[lo] < minimum_shape_volume)
-				continue;
-
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
 			if (are_bboxs_disjoint(

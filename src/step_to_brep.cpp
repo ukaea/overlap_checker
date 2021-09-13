@@ -150,7 +150,7 @@ class collector {
 
 	double minimum_shape_volume;
 
-	int label_num, n_solid;
+	int label_num, n_solid, n_small;
 
 	void add_solids(const TDF_Label &label) {
 		std::string color;
@@ -172,6 +172,7 @@ class collector {
 		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
 			const auto volume = volume_of_shape(shape);
 			if (volume < minimum_shape_volume) {
+				n_small += 1;
 				spdlog::info(
 					"ignoring part of shape {} because it's too small, {} < {}",
 					label_name, volume, minimum_shape_volume);
@@ -182,13 +183,15 @@ class collector {
 			n_solid += 1;
 
 			fmt::print(
-				"{},{},{},{},{}\n",
-				label_num, label_name, color, material_name, material_density);
+				"{},{},{:.1f},{},{},{}\n",
+				label_num, label_name, volume, color, material_name, material_density);
 		}
 	}
 
 public:
-	collector() : label_num{0}, n_solid{0} {
+	collector(double minimum_shape_volume) :
+		minimum_shape_volume{minimum_shape_volume},
+		label_num{0}, n_solid{0}, n_small{0} {
 		builder.MakeCompSolid(merged);
 	}
 
@@ -213,6 +216,9 @@ public:
 		spdlog::info(
 			"enumerated {} labels, resulting in {} solids",
 			label_num, n_solid);
+		if (n_small > 0) {
+			spdlog::warn("{} solids were excluded because they were too small", n_small);
+		}
 	}
 
 	void write_brep_file(const char *path) {
@@ -269,16 +275,18 @@ main(int argc, char **argv)
 
 	CLI::App app{"Convert STEP files to BREP format for preprocessor."};
 	std::string path_in, path_out;
+	double minimum_shape_volume = 1;
 	app.add_option("input", path_in, "Path of the input file")
 		->required()
 		->option_text("file.step");
 	app.add_option("output", path_out, "Path of the output file")
 		->required()
 		->option_text("file.brep");
+	app.add_option("--min_shape_vol,-v", minimum_shape_volume, "Minimum shape volume, in mm^3");
 
 	CLI11_PARSE(app, argc, argv);
 
-	collector doc;
+	collector doc(minimum_shape_volume);
 	load_step_file(path_in.c_str(), doc);
 
 	doc.log_summary();
