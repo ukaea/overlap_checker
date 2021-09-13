@@ -2,6 +2,8 @@
 #include <doctest/doctest.h>
 #endif
 
+#include <fmt/ranges.h>
+
 #include <spdlog/spdlog.h>
 #include <spdlog/cfg/env.h>
 #include <spdlog/stopwatch.h>
@@ -20,6 +22,8 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 
+#include <BRepCheck_Analyzer.hxx>
+
 #include <BRepExtrema_DistShapeShape.hxx>
 
 #include <BRepGProp.hxx>
@@ -34,6 +38,54 @@
 
 #include "document.hpp"
 
+
+template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
+	// parse is inherited from formatter<string_view>.
+	template <typename FormatContext>
+	auto format(BRepCheck_Status c, FormatContext& ctx) {
+		string_view name = "unknown";
+		switch(c) {
+		case BRepCheck_NoError: name = "NoError"; break;
+		case BRepCheck_InvalidPointOnCurve: name = "InvalidPointOnCurve"; break;
+		case BRepCheck_InvalidPointOnCurveOnSurface: name = "InvalidPointOnCurveOnSurface"; break;
+		case BRepCheck_InvalidPointOnSurface: name = "InvalidPointOnSurface"; break;
+		case BRepCheck_No3DCurve: name = "No3DCurve"; break;
+		case BRepCheck_Multiple3DCurve: name = "Multiple3DCurve"; break;
+		case BRepCheck_Invalid3DCurve: name = "Invalid3DCurve"; break;
+		case BRepCheck_NoCurveOnSurface: name = "NoCurveOnSurface"; break;
+		case BRepCheck_InvalidCurveOnSurface: name = "InvalidCurveOnSurface"; break;
+		case BRepCheck_InvalidCurveOnClosedSurface: name = "InvalidCurveOnClosedSurface"; break;
+		case BRepCheck_InvalidSameRangeFlag: name = "InvalidSameRangeFlag"; break;
+		case BRepCheck_InvalidSameParameterFlag: name = "InvalidSameParameterFlag"; break;
+		case BRepCheck_InvalidDegeneratedFlag: name = "InvalidDegeneratedFlag"; break;
+		case BRepCheck_FreeEdge: name = "FreeEdge"; break;
+		case BRepCheck_InvalidMultiConnexity: name = "InvalidMultiConnexity"; break;
+		case BRepCheck_InvalidRange: name = "InvalidRange"; break;
+		case BRepCheck_EmptyWire: name = "EmptyWire"; break;
+		case BRepCheck_RedundantEdge: name = "RedundantEdge"; break;
+		case BRepCheck_SelfIntersectingWire: name = "SelfIntersectingWire"; break;
+		case BRepCheck_NoSurface: name = "NoSurface"; break;
+		case BRepCheck_InvalidWire: name = "InvalidWire"; break;
+		case BRepCheck_RedundantWire: name = "RedundantWire"; break;
+		case BRepCheck_IntersectingWires: name = "IntersectingWires"; break;
+		case BRepCheck_InvalidImbricationOfWires: name = "InvalidImbricationOfWires"; break;
+		case BRepCheck_EmptyShell: name = "EmptyShell"; break;
+		case BRepCheck_RedundantFace: name = "RedundantFace"; break;
+		case BRepCheck_InvalidImbricationOfShells: name = "InvalidImbricationOfShells"; break;
+		case BRepCheck_UnorientableShape: name = "UnorientableShape"; break;
+		case BRepCheck_NotClosed: name = "NotClosed"; break;
+		case BRepCheck_NotConnected: name = "NotConnected"; break;
+		case BRepCheck_SubshapeNotInShape: name = "SubshapeNotInShape"; break;
+		case BRepCheck_BadOrientation: name = "BadOrientation"; break;
+		case BRepCheck_BadOrientationOfSubshape: name = "BadOrientationOfSubshape"; break;
+		case BRepCheck_InvalidPolygonOnTriangulation: name = "InvalidPolygonOnTriangulation"; break;
+		case BRepCheck_InvalidToleranceValue: name = "InvalidToleranceValue"; break;
+		case BRepCheck_EnclosedRegion: name = "EnclosedRegion"; break;
+		case BRepCheck_CheckFail: name = "CheckFail"; break;
+		}
+		return formatter<string_view>::format(name, ctx);
+	}
+};
 
 // code to allow spdlog to print out elapsed time since process started
 class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
@@ -144,6 +196,55 @@ document::load_brep_file(const char* path)
 
 		solid_shapes.push_back(shp);
 	}
+}
+
+static bool
+is_shape_valid(const TopoDS_Shape& shape)
+{
+	BRepCheck_Analyzer checker{shape};
+	if (checker.IsValid()) {
+		return true;
+	}
+
+	const auto &result = checker.Result(shape);
+
+	std::vector<BRepCheck_Status> errors;
+	for (const auto &status : result->StatusOnShape()) {
+		if (status != BRepCheck_NoError) {
+			errors.push_back(status);
+		}
+	}
+
+	for (TopoDS_Iterator it{shape}; it.More(); it.Next()) {
+		const auto &component = it.Value();
+
+		if (checker.IsValid(component)) {
+			continue;
+		}
+
+		for (const auto &status : result->StatusOnShape(component)) {
+			if (status != BRepCheck_NoError) {
+				errors.push_back(status);
+			}
+		}
+	}
+
+	spdlog::warn(
+		"shape contains following errors {}",
+		errors);
+
+	return false;
+}
+
+size_t
+document::count_invalid_shapes() {
+	size_t num_invalid = 0;
+	for (const auto &shape : solid_shapes) {
+		if (!is_shape_valid(shape)) {
+			num_invalid += 1;
+		}
+	}
+	return num_invalid;
 }
 
 intersect_result classify_solid_intersection(

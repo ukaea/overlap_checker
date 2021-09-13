@@ -7,13 +7,14 @@
 #include <condition_variable>
 
 #include <fmt/format.h>
-#include <fmt/ranges.h>
 
 #include <spdlog/spdlog.h>
 
-#include <TopoDS_Iterator.hxx>
+#include <CLI/App.hpp>
+#include <CLI/Formatter.hpp>
+#include <CLI/Config.hpp>
 
-#include <BRepCheck_Analyzer.hxx>
+#include <TopoDS_Iterator.hxx>
 
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
@@ -53,93 +54,6 @@ template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
 		return formatter<string_view>::format(name, ctx);
 	}
 };
-
-template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
-	// parse is inherited from formatter<string_view>.
-	template <typename FormatContext>
-	auto format(BRepCheck_Status c, FormatContext& ctx) {
-		string_view name = "unknown";
-		switch(c) {
-		case BRepCheck_NoError: name = "NoError"; break;
-		case BRepCheck_InvalidPointOnCurve: name = "InvalidPointOnCurve"; break;
-		case BRepCheck_InvalidPointOnCurveOnSurface: name = "InvalidPointOnCurveOnSurface"; break;
-		case BRepCheck_InvalidPointOnSurface: name = "InvalidPointOnSurface"; break;
-		case BRepCheck_No3DCurve: name = "No3DCurve"; break;
-		case BRepCheck_Multiple3DCurve: name = "Multiple3DCurve"; break;
-		case BRepCheck_Invalid3DCurve: name = "Invalid3DCurve"; break;
-		case BRepCheck_NoCurveOnSurface: name = "NoCurveOnSurface"; break;
-		case BRepCheck_InvalidCurveOnSurface: name = "InvalidCurveOnSurface"; break;
-		case BRepCheck_InvalidCurveOnClosedSurface: name = "InvalidCurveOnClosedSurface"; break;
-		case BRepCheck_InvalidSameRangeFlag: name = "InvalidSameRangeFlag"; break;
-		case BRepCheck_InvalidSameParameterFlag: name = "InvalidSameParameterFlag"; break;
-		case BRepCheck_InvalidDegeneratedFlag: name = "InvalidDegeneratedFlag"; break;
-		case BRepCheck_FreeEdge: name = "FreeEdge"; break;
-		case BRepCheck_InvalidMultiConnexity: name = "InvalidMultiConnexity"; break;
-		case BRepCheck_InvalidRange: name = "InvalidRange"; break;
-		case BRepCheck_EmptyWire: name = "EmptyWire"; break;
-		case BRepCheck_RedundantEdge: name = "RedundantEdge"; break;
-		case BRepCheck_SelfIntersectingWire: name = "SelfIntersectingWire"; break;
-		case BRepCheck_NoSurface: name = "NoSurface"; break;
-		case BRepCheck_InvalidWire: name = "InvalidWire"; break;
-		case BRepCheck_RedundantWire: name = "RedundantWire"; break;
-		case BRepCheck_IntersectingWires: name = "IntersectingWires"; break;
-		case BRepCheck_InvalidImbricationOfWires: name = "InvalidImbricationOfWires"; break;
-		case BRepCheck_EmptyShell: name = "EmptyShell"; break;
-		case BRepCheck_RedundantFace: name = "RedundantFace"; break;
-		case BRepCheck_InvalidImbricationOfShells: name = "InvalidImbricationOfShells"; break;
-		case BRepCheck_UnorientableShape: name = "UnorientableShape"; break;
-		case BRepCheck_NotClosed: name = "NotClosed"; break;
-		case BRepCheck_NotConnected: name = "NotConnected"; break;
-		case BRepCheck_SubshapeNotInShape: name = "SubshapeNotInShape"; break;
-		case BRepCheck_BadOrientation: name = "BadOrientation"; break;
-		case BRepCheck_BadOrientationOfSubshape: name = "BadOrientationOfSubshape"; break;
-		case BRepCheck_InvalidPolygonOnTriangulation: name = "InvalidPolygonOnTriangulation"; break;
-		case BRepCheck_InvalidToleranceValue: name = "InvalidToleranceValue"; break;
-		case BRepCheck_EnclosedRegion: name = "EnclosedRegion"; break;
-		case BRepCheck_CheckFail: name = "CheckFail"; break;
-		}
-		return formatter<string_view>::format(name, ctx);
-	}
-};
-
-
-static bool
-is_shape_valid(const TopoDS_Shape& shape)
-{
-	BRepCheck_Analyzer checker{shape};
-	if (checker.IsValid()) {
-		return true;
-	}
-
-	const auto &result = checker.Result(shape);
-
-	std::vector<BRepCheck_Status> errors;
-	for (const auto &status : result->StatusOnShape()) {
-		if (status != BRepCheck_NoError) {
-			errors.push_back(status);
-		}
-	}
-
-	for (TopoDS_Iterator it{shape}; it.More(); it.Next()) {
-		const auto &component = it.Value();
-
-		if (checker.IsValid(component)) {
-			continue;
-		}
-
-		for (const auto &status : result->StatusOnShape(component)) {
-			if (status != BRepCheck_NoError) {
-				errors.push_back(status);
-			}
-		}
-	}
-
-	spdlog::warn(
-		"shape contains following errors {}",
-		errors);
-
-	return false;
-}
 
 struct worker_input {
 	size_t hi, lo;
@@ -251,48 +165,29 @@ main(int argc, char **argv)
 {
 	configure_spdlog();
 
-	if(argc != 1) {
-		spdlog::critical("{} takes no arguments.\n", argv[0]);
-		return 1;
-	}
+	CLI::App app{"Convert STEP files to BREP format for preprocessor."};
+	std::string path_in;
+	bool perform_geometry_checking{true};
+	app.add_option("input", path_in, "Path of the input file")
+		->required()
+		->option_text("file.brep");
+	app.add_flag(
+		"--check-geometry,!--no-check-geometry",
+		perform_geometry_checking,
+		"Check overall validity of shapes");
 
-	const char *path = "input.brep";
+	CLI11_PARSE(app, argc, argv);
 
 	document doc;
-	doc.load_brep_file(path);
+	doc.load_brep_file(path_in.c_str());
 
-	// AFAICT: from this point only doc.solid_shapes is used by original code,
-	// searching for mySolids in the original code seems to have lots of
-	// relevant hits
-
-	/*
-	** Geom::GeometryShapeChecker processor
-	*/
-	spdlog::info("checking geometry");
-	bool all_ok = true;
-	for (const auto &shape : doc.solid_shapes) {
-		if (!is_shape_valid(shape)) {
-			all_ok = false;
+	if (perform_geometry_checking) {
+		spdlog::debug("checking geometry");
+		auto ninvalid = doc.count_invalid_shapes();
+		if (ninvalid) {
+			spdlog::critical("{} shapes were not valid", ninvalid);
+			return 1;
 		}
-	}
-	if (!all_ok) {
-		spdlog::critical("some shapes were not valid");
-		return 1;
-	}
-
-	/*
-	** Geom::GeometryPropertyBuilder processor
-	*/
-	if (false) {
-		spdlog::info("caching geometry properties");
-		// original code runs OccUtils::geometryProperty(shape) on every @shape.
-
-		// why?  just so that _metadata.json could be written out?
-		//
-		//  * hashes for later referencing material properties seems useful
-
-		// is this just because the code was using the shape Explorer rather
-		// than Iterator, hence ordering could get weird
 	}
 
 	/*
