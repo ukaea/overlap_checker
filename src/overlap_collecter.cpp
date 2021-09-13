@@ -43,8 +43,8 @@ main(int argc, char **argv)
 	TopoDS_Compound merged;
 	builder.MakeCompound(merged);
 
-    std::string row;
-    while (!std::cin.eof()) {
+	std::string row;
+	while (!std::cin.eof()) {
 		std::getline(std::cin, row);
 		// make sure we didn't get a blank line
 		if (std::cin.fail()) {
