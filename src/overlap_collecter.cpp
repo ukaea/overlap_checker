@@ -45,15 +45,15 @@ main(int argc, char **argv)
 
     std::string row;
     while (!std::cin.eof()) {
-        std::getline(std::cin, row);
+		std::getline(std::cin, row);
 		// make sure we didn't get a blank line
 		if (std::cin.fail()) {
 			break;
 		}
-        if (std::cin.bad()) {
+		if (std::cin.bad()) {
 			spdlog::critical("failed to read line");
 			return 1;
-        }
+		}
 
 		auto fields = parse_csv_row(row);
 
