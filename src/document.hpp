@@ -3,6 +3,7 @@
 // from opencascade
 #include <TopoDS_Shape.hxx>
 
+void configure_spdlog();
 
 bool are_vals_close(double a, double b, double drel=1e-10, double dabs=1e-13);
 

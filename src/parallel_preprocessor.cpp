@@ -10,10 +10,6 @@
 #include <fmt/ranges.h>
 
 #include <spdlog/spdlog.h>
-#include <spdlog/cfg/env.h>
-#include <spdlog/stopwatch.h>
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <TopoDS_Iterator.hxx>
 
@@ -24,29 +20,6 @@
 
 #include "document.hpp"
 
-
-// code to allow spdlog to print out elapsed time since process started
-class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
-{
-    using clock = std::chrono::steady_clock;
-	using timepoint = std::chrono::time_point<clock>;
-
-    timepoint reference;
-
-public:
-	time_elapsed_formatter_flag() : reference{clock::now()} {}
-	time_elapsed_formatter_flag(timepoint ref) : reference{ref} {}
-
-	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override {
-		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
-		auto txt = fmt::format("{:.3f}", elapsed.count());
-        dest.append(txt.data(), txt.data() + txt.size());
-    }
-
-    std::unique_ptr<custom_flag_formatter> clone() const override {
-        return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
-    }
-};
 
 // helper methods to allow fmt to display some OCCT values nicely
 template <> struct fmt::formatter<Bnd_OBB>: formatter<string_view> {
@@ -276,19 +249,7 @@ are_bboxs_disjoint(const Bnd_OBB &b1, const Bnd_OBB& b2, double tolerance)
 int
 main(int argc, char **argv)
 {
-	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
-	spdlog::cfg::load_env_levels();
-
-	auto formatter = std::make_unique<spdlog::pattern_formatter>();
-	formatter->add_flag<time_elapsed_formatter_flag>('*');
-	formatter->set_pattern("[%*] [%^%l%$] %v");
-    spdlog::set_formatter(std::move(formatter));
-
-    // Replace the default logger with a (color, single-threaded) stderr
-    // logger with name "" (but first replace it with an arbitrarily-named
-    // logger to prevent a name clash)
-    spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
-    spdlog::set_default_logger(spdlog::stderr_color_mt(""));
+	configure_spdlog();
 
 	if(argc != 1) {
 		spdlog::critical("{} takes no arguments.\n", argv[0]);

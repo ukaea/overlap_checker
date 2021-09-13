@@ -148,6 +148,8 @@ class collector {
 	TopoDS_Builder builder;
 	TopoDS_CompSolid merged;
 
+	double minimum_shape_volume;
+
 	int label_num, n_solid;
 
 	void add_solids(const TDF_Label &label) {
@@ -168,6 +170,14 @@ class collector {
 
 		// add the solids to our list of things to do
 		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
+			const auto volume = volume_of_shape(shape);
+			if (volume < minimum_shape_volume) {
+				spdlog::info(
+					"ignoring part of shape {} because it's too small, {} < {}",
+					label_name, volume, minimum_shape_volume);
+				continue;
+			}
+
 			builder.Add(merged, ex.Current());
 			n_solid += 1;
 
@@ -255,8 +265,7 @@ load_step_file(const char* path, collector &col) {
 int
 main(int argc, char **argv)
 {
-	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
-	spdlog::cfg::load_env_levels();
+	configure_spdlog();
 
 	CLI::App app{"Convert STEP files to BREP format for preprocessor."};
 	std::string path_in, path_out;
