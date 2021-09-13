@@ -185,10 +185,10 @@ main(int argc, char **argv)
 		perform_geometry_checks,
 		"Check overall validity of shapes");
 	app.add_option(
-		"--bbox_clearance", bbox_clearance,
+		"--bbox-clearance", bbox_clearance,
 		"Bounding-boxes closer than this will be checked for overlaps");
 	app.add_option(
-		"--imprint_tolerance", imprint_tolerance,
+		"--imprint-tolerance", imprint_tolerance,
 		"Faces, edges, and verticies will be merged when closer than this");
 
 	CLI11_PARSE(app, argc, argv);
@@ -197,6 +197,10 @@ main(int argc, char **argv)
 	if (num_parallel > 1024) {
 		spdlog::critical("using >1024 threads is currently unsupported");
 		return 1;
+	} else if (num_parallel == 0) {
+		// might want to properly handle this by not using threads, but this
+		// is enough to get it working
+		num_parallel = 1;
 	} else {
 		unsigned max_parallel = std::thread::hardware_concurrency();
 		if (max_parallel && num_parallel > max_parallel * 2) {

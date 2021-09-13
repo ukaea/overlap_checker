@@ -282,7 +282,7 @@ main(int argc, char **argv)
 	app.add_option("output", path_out, "Path of the output file")
 		->required()
 		->option_text("file.brep");
-	app.add_option("--min_shape_vol,-v", minimum_shape_volume, "Minimum shape volume, in mm^3");
+	app.add_option("--min-shape-vol,-v", minimum_shape_volume, "Minimum shape volume, in mm^3");
 
 	CLI11_PARSE(app, argc, argv);
 
