@@ -7,14 +7,11 @@
 #include <condition_variable>
 
 #include <fmt/format.h>
-
 #include <spdlog/spdlog.h>
 
 #include <CLI/App.hpp>
 #include <CLI/Formatter.hpp>
 #include <CLI/Config.hpp>
-
-#include <TopoDS_Iterator.hxx>
 
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
@@ -165,23 +162,82 @@ main(int argc, char **argv)
 {
 	configure_spdlog();
 
-	CLI::App app{"Convert STEP files to BREP format for preprocessor."};
+	CLI::App app{"Perform inprinting of BREP shapes."};
 	std::string path_in;
-	bool perform_geometry_checking{true};
-	app.add_option("input", path_in, "Path of the input file")
+	unsigned num_parallel = 4;
+	bool perform_geometry_checks{true};
+	double
+		bbox_clearance = 0.5,
+		imprint_tolerance = 0.001,
+		max_common_volume_ratio = 0.01;
+
+	app.add_option(
+		"input", path_in,
+		"Path of the input file")
 		->required()
 		->option_text("file.brep");
+	app.add_option(
+		"-j", num_parallel,
+		"Number of threads to parallelise over")
+		->option_text("jobs");
 	app.add_flag(
 		"--check-geometry,!--no-check-geometry",
-		perform_geometry_checking,
+		perform_geometry_checks,
 		"Check overall validity of shapes");
+	app.add_option(
+		"--bbox_clearance", bbox_clearance,
+		"Bounding-boxes closer than this will be checked for overlaps");
+	app.add_option(
+		"--imprint_tolerance", imprint_tolerance,
+		"Faces, edges, and verticies will be merged when closer than this");
 
 	CLI11_PARSE(app, argc, argv);
+
+	// make sure parameters are sane!
+	if (num_parallel > 1024) {
+		spdlog::critical("using >1024 threads is currently unsupported");
+		return 1;
+	} else {
+		unsigned max_parallel = std::thread::hardware_concurrency();
+		if (max_parallel && num_parallel > max_parallel * 2) {
+			spdlog::warn(
+				"requesting significantly more than the number of cores ({} > {}) is unlikely to help",
+				num_parallel, max_parallel);
+		}
+	}
+
+	if (bbox_clearance < 0) {
+		spdlog::critical(
+			"bounding-box clearance ({}) should not be negative",
+			bbox_clearance);
+		return 1;
+	}
+
+	if (imprint_tolerance < 0) {
+		spdlog::critical(
+			"imprinting tolerance ({}) should not be negative",
+			imprint_tolerance);
+		return 1;
+	}
+
+	if (bbox_clearance < imprint_tolerance) {
+		spdlog::warn(
+			"bbox clearance ({}) smaller than imprinting tolerance ({})",
+			bbox_clearance, imprint_tolerance);
+	}
+
+	if (max_common_volume_ratio < 0 ||
+		max_common_volume_ratio > 1) {
+		spdlog::critical(
+			"max common volume ratio ({}) should be in (0., 1.) when inprinting",
+			max_common_volume_ratio);
+		return 1;
+	}
 
 	document doc;
 	doc.load_brep_file(path_in.c_str());
 
-	if (perform_geometry_checking) {
+	if (perform_geometry_checks) {
 		spdlog::debug("checking geometry");
 		auto ninvalid = doc.count_invalid_shapes();
 		if (ninvalid) {
@@ -190,12 +246,6 @@ main(int argc, char **argv)
 		}
 	}
 
-	/*
-	** Geom::BoundBoxBuilder processor
-	*
-	* just use Orientated Bounding Boxes for now, worry about compatibility
-	* later!
-	*/
 	spdlog::info("calculating shape information");
 	std::vector<Bnd_OBB> bounding_boxes;
 	std::vector<double> volumes;
@@ -209,46 +259,7 @@ main(int argc, char **argv)
 		volumes.push_back(volume_of_shape(shape));
 	}
 
-	/*
-	** Geom::GeometryImprinter
-	*/
-
 	spdlog::info("starting imprinting");
-
-	// need more descriptive names for tolerance and clearance
-	const double
-		imprint_tolerance = 0.1, // 0.001 is a good default, but larger value causes testable changes
-		imprint_clearance = 0.5,
-		imprint_max_common_volume_ratio = 0.01;
-
-	if (imprint_tolerance <= 0) {
-		spdlog::critical(
-			"imprinting tolerance ({}) should be positive",
-			imprint_tolerance);
-		return 1;
-	}
-
-	if (imprint_clearance <= 0) {
-		spdlog::critical(
-			"imprinting clearance ({}) should be positive",
-			imprint_clearance);
-		return 1;
-	}
-
-	if (imprint_clearance <= imprint_tolerance) {
-		spdlog::critical(
-			"imprinting clearance ({}) should be larger than tolerance ({})",
-			imprint_clearance, imprint_tolerance);
-		return 1;
-	}
-
-	if (imprint_max_common_volume_ratio <= 0 ||
-		imprint_max_common_volume_ratio >= 1) {
-		spdlog::critical(
-			"imprinting max common volume ratio ({}) should be in (0., 1.)",
-			imprint_max_common_volume_ratio);
-		return 1;
-	}
 
 	worker_queue queue;
 
@@ -257,7 +268,7 @@ main(int argc, char **argv)
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
 			if (are_bboxs_disjoint(
-					bounding_boxes[hi], bounding_boxes[lo], imprint_clearance)) {
+					bounding_boxes[hi], bounding_boxes[lo], bbox_clearance)) {
 				continue;
 			}
 
@@ -267,11 +278,14 @@ main(int argc, char **argv)
 	}
 
 	{
-		size_t remain = queue.input_size();
+		size_t
+			remain = queue.input_size(),
+			num_failed = 0,
+			num_intersected = 0;
 
 		spdlog::debug("launching worker threads");
 		std::vector<std::thread> threads;
-		for (int i = 0; i < 4; i++) {
+		for (unsigned i = 0; i < num_parallel; i++) {
 			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue));
 		}
 		spdlog::debug("waiting for results from workers");
@@ -283,38 +297,51 @@ main(int argc, char **argv)
 
 			switch (output.result.status) {
 			case intersect_status::failed:
-				spdlog::error("{:5}-{:<5} failed to merge");
+				spdlog::warn("{:5}-{:<5} failed to classify overlap");
+				num_failed += 1;
 				continue;
 			case intersect_status::distinct:
 				spdlog::debug("{:5}-{:<5} are distinct", hi, lo);
-				// and... we're done, next pair please!
 				continue;
 			case intersect_status::touching:
-				spdlog::info("{:5}-{:<5} touch", hi, lo);
+				fmt::print("{},{},touch\n", hi, lo);
 				break;
 			case intersect_status::overlap: {
 				const double
 					vol_common = output.result.vol_common,
 					min_vol = std::min(volumes[hi], volumes[lo]),
-					max_overlap = min_vol * imprint_max_common_volume_ratio;
+					max_overlap = min_vol * max_common_volume_ratio;
 
 				if (vol_common > max_overlap) {
 					spdlog::warn(
 						"{:5}-{:<5} too much overlap ({:.2f}) between shapes ({:.2f}, {:.2f})",
 						hi, lo, vol_common, volumes[hi], volumes[lo]);
+					fmt::print("{},{},bad_overlap\n", hi, lo);
+					num_intersected += 1;
 				} else {
 					spdlog::info(
 						"{:5}-{:<5} overlap by an acceptable amount, {:.2f}% of smaller shape",
 						hi, lo, vol_common / min_vol * 100);
+					fmt::print("{},{},overlap\n", hi, lo);
 				}
 				break;
 			}
 			}
+
+			// flush any CSV output
+			std::cout << std::flush;
 		}
 
 		spdlog::debug("joining worker threads");
 		for (auto &thread : threads) {
 			thread.join();
+		}
+
+		if (num_failed || num_intersected) {
+			spdlog::critical(
+				"errors occurred while processing, {} failed, {} intersected",
+				num_failed, num_intersected);
+			return 1;
 		}
 	}
 
