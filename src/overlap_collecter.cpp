@@ -111,7 +111,10 @@ main(int argc, char **argv)
 		op.SetRunParallel(false);
 
 		op.Build();
-		assert(op.IsDone());
+		if(!op.IsDone()) {
+			spdlog::critical("unable determine solid common to shapes");
+			return 1;
+		}
 
 		builder.Add(merged, op.Shape());
 	}
