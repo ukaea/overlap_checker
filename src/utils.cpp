@@ -19,10 +19,10 @@
 // code to allow spdlog to print out elapsed time since process started
 class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
 {
-    using clock = std::chrono::steady_clock;
+	using clock = std::chrono::steady_clock;
 	using timepoint = std::chrono::time_point<clock>;
 
-    timepoint reference;
+	timepoint reference;
 
 public:
 	time_elapsed_formatter_flag() : reference{clock::now()} {}
@@ -31,12 +31,12 @@ public:
 	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override {
 		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
 		auto txt = fmt::format("{:.3f}", elapsed.count());
-        dest.append(txt.data(), txt.data() + txt.size());
-    }
+		dest.append(txt.data(), txt.data() + txt.size());
+	}
 
-    std::unique_ptr<custom_flag_formatter> clone() const override {
-        return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
-    }
+	std::unique_ptr<custom_flag_formatter> clone() const override {
+		return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
+	}
 };
 
 void configure_spdlog()
@@ -47,13 +47,13 @@ void configure_spdlog()
 	auto formatter = std::make_unique<spdlog::pattern_formatter>();
 	formatter->add_flag<time_elapsed_formatter_flag>('*');
 	formatter->set_pattern("[%*] [%^%l%$] %v");
-    spdlog::set_formatter(std::move(formatter));
+	spdlog::set_formatter(std::move(formatter));
 
-    // Replace the default logger with a (color, single-threaded) stderr
-    // logger with name "" (but first replace it with an arbitrarily-named
-    // logger to prevent a name clash)
-    spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
-    spdlog::set_default_logger(spdlog::stderr_color_mt(""));
+	// Replace the default logger with a (color, single-threaded) stderr
+	// logger with name "" (but first replace it with an arbitrarily-named
+	// logger to prevent a name clash)
+	spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
+	spdlog::set_default_logger(spdlog::stderr_color_mt(""));
 }
 
 
@@ -179,9 +179,9 @@ TEST_SUITE("testing size_t_of_string") {
 #endif
 
 enum class CSVState {
-    UnquotedField,
-    QuotedField,
-    QuotedQuote
+	UnquotedField,
+	QuotedField,
+	QuotedQuote
 };
 
 // copied from https://stackoverflow.com/a/30338543/1358308
