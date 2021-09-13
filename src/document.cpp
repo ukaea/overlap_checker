@@ -11,10 +11,12 @@
 #include <TopExp_Explorer.hxx>
 
 #include <BRepTools.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepAlgoAPI_Section.hxx>
 #include <BRepAlgoAPI_Common.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
+
 #include <BRepExtrema_DistShapeShape.hxx>
-#include <BRep_Builder.hxx>
 
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>

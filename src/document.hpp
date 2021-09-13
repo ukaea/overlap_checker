@@ -36,7 +36,8 @@ enum class intersect_status {
 struct intersect_result {
 	intersect_status status;
 
-	// requesting a fuzzy value of zero actually uses 1e-9 instead
+	// the minimum fuzzy value is 1e-9, this reports the correct value if
+	// something smaller is requested
 	double fuzzy_value;
 
 	// might want more than this later!

@@ -10,6 +10,7 @@
 #include <CLI/Formatter.hpp>
 #include <CLI/Config.hpp>
 
+#include <STEPCAFControl_Reader.hxx>
 #include <XCAFApp_Application.hxx>
 #include <XCAFDoc.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
@@ -17,8 +18,6 @@
 #include <XCAFDoc_ColorTool.hxx>
 #include <XCAFDoc_Material.hxx>
 #include <XCAFDoc_Color.hxx>
-
-#include <STEPCAFControl_Reader.hxx>
 
 #include <TDocStd_Document.hxx>
 #include <TDataStd_Name.hxx>
@@ -234,7 +233,7 @@ load_step_file(const char* path, collector &col) {
 	spdlog::debug("transferring into doc");
 
 	Handle(TDocStd_Document) doc;
-	app->NewDocument(TCollection_ExtendedString("MDTV-CAF"), doc);
+	app->NewDocument("MDTV-XCAF", doc);
 	if (!reader.Transfer(doc)) {
 		spdlog::critical("failed to Transfer into document");
 		std::abort();

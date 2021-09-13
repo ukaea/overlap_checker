@@ -1,9 +1,10 @@
 #include <string>
 #include <vector>
-#include <deque>
-#include <condition_variable>
 
-#include <pthread.h>
+#include <thread>
+#include <deque>
+#include <mutex>
+#include <condition_variable>
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -12,6 +13,7 @@
 #include <spdlog/cfg/env.h>
 #include <spdlog/stopwatch.h>
 #include <spdlog/pattern_formatter.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include <TopoDS_Iterator.hxx>
 
@@ -23,43 +25,8 @@
 #include "document.hpp"
 
 
-// trim from left
-static std::string& ltrim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
-{
-    s.erase(0, s.find_first_not_of(t));
-    return s;
-}
-
-// trim from right
-static std::string& rtrim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
-{
-    s.erase(s.find_last_not_of(t) + 1);
-    return s;
-}
-
-// trim from left & right
-static std::string& trim_inplace(std::string& s, const char* t = " \t\n\r\f\v")
-{
-    return ltrim_inplace(rtrim_inplace(s, t), t);
-}
-
-// copying versions
-inline std::string ltrim(std::string s, const char* t = " \t\n\r\f\v")
-{
-    return ltrim_inplace(s, t);
-}
-
-inline std::string rtrim(std::string s, const char* t = " \t\n\r\f\v")
-{
-    return rtrim_inplace(s, t);
-}
-
-inline std::string trim(std::string s, const char* t = " \t\n\r\f\v")
-{
-    return trim_inplace(s, t);
-}
-
-class my_formatter_flag : public spdlog::custom_flag_formatter
+// code to allow spdlog to print out elapsed time since process started
+class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
 {
     using clock = std::chrono::steady_clock;
 	using timepoint = std::chrono::time_point<clock>;
@@ -67,22 +34,21 @@ class my_formatter_flag : public spdlog::custom_flag_formatter
     timepoint reference;
 
 public:
-	my_formatter_flag() : reference{clock::now()} {}
-	my_formatter_flag(timepoint ref) : reference{ref} {}
+	time_elapsed_formatter_flag() : reference{clock::now()} {}
+	time_elapsed_formatter_flag(timepoint ref) : reference{ref} {}
 
-	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override
-    {
+	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override {
 		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
 		auto txt = fmt::format("{:.3f}", elapsed.count());
         dest.append(txt.data(), txt.data() + txt.size());
     }
 
-    std::unique_ptr<custom_flag_formatter> clone() const override
-    {
-        return spdlog::details::make_unique<my_formatter_flag>(reference);
+    std::unique_ptr<custom_flag_formatter> clone() const override {
+        return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
     }
 };
 
+// helper methods to allow fmt to display some OCCT values nicely
 template <> struct fmt::formatter<Bnd_OBB>: formatter<string_view> {
   // parse is inherited from formatter<string_view>.
 	template <typename FormatContext>
@@ -167,15 +133,14 @@ template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
 static bool
 is_shape_valid(const TopoDS_Shape& shape)
 {
-	BRepCheck_Analyzer checker(shape);
-
+	BRepCheck_Analyzer checker{shape};
 	if (checker.IsValid()) {
 		return true;
 	}
-	std::vector<BRepCheck_Status> errors;
 
 	const auto &result = checker.Result(shape);
 
+	std::vector<BRepCheck_Status> errors;
 	for (const auto &status : result->StatusOnShape()) {
 		if (status != BRepCheck_NoError) {
 			errors.push_back(status);
@@ -203,18 +168,6 @@ is_shape_valid(const TopoDS_Shape& shape)
 	return false;
 }
 
-static bool
-are_bboxs_disjoint(const Bnd_OBB &b1, const Bnd_OBB& b2, double tolerance)
-{
-	if (tolerance > 0) {
-		Bnd_OBB e1{b1}, e2{b2};
-		e1.Enlarge(tolerance);
-		e2.Enlarge(tolerance);
-		return e1.IsOut(e2);
-	}
-	return b1.IsOut(b2);
-}
-
 struct worker_input {
 	size_t hi, lo;
 	double fuzzy_value;
@@ -233,10 +186,6 @@ class worker_queue {
 	std::deque<worker_output> output;
 
 public:
-	document &doc;
-
-	worker_queue(document &doc) : doc{doc} {}
-
 	size_t input_size() {
 		return input.size();
 	}
@@ -278,19 +227,17 @@ public:
 	}
 };
 
-static void *
-worker(void *param)
+static void
+shape_classifier(const document &doc, worker_queue &queue)
 {
 	spdlog::debug("worker thread starting");
 
-	worker_queue *queue = (worker_queue*)param;
-
-	const auto &shapes = queue->doc.solid_shapes;
+	const auto &shapes = doc.solid_shapes;
 
 	worker_input input;
 	worker_output output;
 
-	while (queue->next_input(input)) {
+	while (queue.next_input(input)) {
 		const auto &shape = shapes[output.hi = input.hi];
 		const auto &tool = shapes[output.lo = input.lo];
 
@@ -305,13 +252,26 @@ worker(void *param)
 			output.result = classify_solid_intersection(shape, tool, 0);
 		}
 
-		queue->add_output(output);
+		queue.add_output(output);
 	}
 
 	spdlog::debug("worker thread exiting");
-	return nullptr;
 }
 
+
+// "OBB" stands for "orientated bounding-box", i.e. aligned to the shape
+// rather than the axis
+static bool
+are_bboxs_disjoint(const Bnd_OBB &b1, const Bnd_OBB& b2, double tolerance)
+{
+	if (tolerance > 0) {
+		Bnd_OBB e1{b1}, e2{b2};
+		e1.Enlarge(tolerance);
+		e2.Enlarge(tolerance);
+		return e1.IsOut(e2);
+	}
+	return b1.IsOut(b2);
+}
 
 int
 main(int argc, char **argv)
@@ -320,11 +280,18 @@ main(int argc, char **argv)
 	spdlog::cfg::load_env_levels();
 
 	auto formatter = std::make_unique<spdlog::pattern_formatter>();
-    formatter->add_flag<my_formatter_flag>('*').set_pattern("[%*] [%^%l%$] %v");
+	formatter->add_flag<time_elapsed_formatter_flag>('*');
+	formatter->set_pattern("[%*] [%^%l%$] %v");
     spdlog::set_formatter(std::move(formatter));
 
+    // Replace the default logger with a (color, single-threaded) stderr
+    // logger with name "" (but first replace it with an arbitrarily-named
+    // logger to prevent a name clash)
+    spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
+    spdlog::set_default_logger(spdlog::stderr_color_mt(""));
+
 	if(argc != 1) {
-		fmt::print(stderr, "{} takes no arguments.\n", argv[0]);
+		spdlog::critical("{} takes no arguments.\n", argv[0]);
 		return 1;
 	}
 
@@ -428,7 +395,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	worker_queue queue(doc);
+	worker_queue queue;
 
 	for (size_t hi = 0; hi < doc.solid_shapes.size(); hi++) {
 		if (volumes[hi] < minimum_shape_volume) {
@@ -458,11 +425,9 @@ main(int argc, char **argv)
 		size_t remain = queue.input_size();
 
 		spdlog::debug("launching worker threads");
-		std::vector<pthread_t> threads;
+		std::vector<std::thread> threads;
 		for (int i = 0; i < 4; i++) {
-			pthread_t tid;
-			assert (pthread_create(&tid, NULL, worker, &queue) == 0);
-			threads.push_back(tid);
+			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue));
 		}
 		spdlog::debug("waiting for results from workers");
 
@@ -503,9 +468,8 @@ main(int argc, char **argv)
 		}
 
 		spdlog::debug("joining worker threads");
-		for (const auto tid : threads) {
-			void *tmp;
-			assert(pthread_join(tid, &tmp) == 0);
+		for (auto &thread : threads) {
+			thread.join();
 		}
 	}
 
