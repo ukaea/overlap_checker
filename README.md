@@ -19,9 +19,11 @@ pip install -U conan meson ninja
 # if you want to use clangd for IDE integration, setting these might help
 export CC=clang CXX=clang++
 
-# packages don't exist for arch so need to do
-conan install --build=spdlog spdlog/1.9.2@
+# pre-built packages don't exist for me, so I do
 conan install --build=fmt fmt/8.0.1@
+conan install --build=spdlog spdlog/1.9.2@
+conan install --build=cli11 cli11/2.0.0@
+conan install --build=doctest doctest/2.4.6@
 
 # set up build directory
 meson setup build
