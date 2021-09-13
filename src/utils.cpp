@@ -1,3 +1,7 @@
+#ifdef INCLUDE_DOCTESTS
+#include <doctest/doctest.h>
+#endif
+
 #include <errno.h>
 #include <climits>
 
@@ -69,6 +73,23 @@ are_vals_close(const double a, const double b, const double drel, const double d
 	return std::abs(b - a) < (drel * mag + dabs);
 }
 
+#ifdef DOCTEST_LIBRARY_INCLUDED
+TEST_SUITE("testing are_vals_close") {
+	TEST_CASE("identical values") {
+		CHECK(are_vals_close(0, 0));
+		CHECK(are_vals_close(1, 1));
+	}
+	TEST_CASE("close values") {
+		CHECK(are_vals_close(0, 1e-15));
+		CHECK(are_vals_close(1, 1+1e-15));
+	}
+	TEST_CASE("far values") {
+		CHECK_FALSE(are_vals_close(0, 1));
+		CHECK_FALSE(are_vals_close(1, 0));
+		CHECK_FALSE(are_vals_close(0, 1e-10));
+	}
+}
+#endif
 
 bool int_of_string(const char *s, int &i, int base)
 {
@@ -92,13 +113,13 @@ bool int_of_string(const char *s, int &i, int base)
 bool size_t_of_string(const char *s, size_t &i, int base)
 {
 	char *end;
-	unsigned long  l;
+	long  l;
 	errno = 0;
-	l = strtoul(s, &end, base);
-	if ((errno == ERANGE && l == ULONG_MAX) || l > std::numeric_limits<size_t>::max()) {
+	l = strtol(s, &end, base);
+	if (errno == ERANGE && l == LONG_MAX) {
 		return false;
 	}
-	if (errno == ERANGE && l == 0) {
+	if ((errno == ERANGE && l == LONG_MIN) || l < 0) {
 		return false;
 	}
 	if (*s == '\0' || *end != '\0') {
@@ -107,6 +128,55 @@ bool size_t_of_string(const char *s, size_t &i, int base)
 	i = l;
 	return true;
 }
+
+#ifdef DOCTEST_LIBRARY_INCLUDED
+TEST_SUITE("testing int_of_string") {
+	TEST_CASE("success") {
+		int val = -1;
+		CHECK(int_of_string("0", val));
+		CHECK_EQ(val, 0);
+		CHECK(int_of_string("1", val));
+		CHECK_EQ(val, 1);
+		CHECK(int_of_string("-1", val));
+		CHECK_EQ(val, -1);
+		CHECK(int_of_string("0x10", val));
+		CHECK_EQ(val, 16);
+		CHECK(int_of_string("ff", val, 16));
+		CHECK_EQ(val, 255);
+	}
+	TEST_CASE("failure") {
+		int val = -1;
+		CHECK_FALSE(int_of_string("", val));
+		CHECK_EQ(val, -1);
+		CHECK_FALSE(int_of_string("zzz", val));
+		CHECK_EQ(val, -1);
+	}
+}
+TEST_SUITE("testing size_t_of_string") {
+	TEST_CASE("success") {
+		size_t val = 1;
+		CHECK(size_t_of_string("0", val));
+		CHECK_EQ(val, 0);
+		CHECK(size_t_of_string("1", val));
+		CHECK_EQ(val, 1);
+		CHECK(size_t_of_string("0x10", val));
+		CHECK_EQ(val, 16);
+		CHECK(size_t_of_string("ff", val, 16));
+		CHECK_EQ(val, 255);
+	}
+	TEST_CASE("failure") {
+		size_t val = 7;
+		CHECK_FALSE(size_t_of_string("", val));
+		CHECK_EQ(val, 7);
+		CHECK_FALSE(size_t_of_string("-1", val));
+		CHECK_EQ(val, 7);
+		CHECK_FALSE(size_t_of_string("18446744073709551616", val));
+		CHECK_EQ(val, 7);
+		CHECK_FALSE(size_t_of_string("zzz", val));
+		CHECK_EQ(val, 7);
+	}
+}
+#endif
 
 enum class CSVState {
     UnquotedField,

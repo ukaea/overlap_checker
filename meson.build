@@ -51,7 +51,7 @@ deps += declare_dependency(
   include_directories : ['/usr/include/opencascade'],
 )
 
-exe = executable('test_runner', ['src/test_runner.cpp', 'src/document.cpp'],
+exe = executable('test_runner', ['src/test_runner.cpp', 'src/document.cpp', 'src/utils.cpp'],
   dependencies : deps,
   cpp_args : '-DINCLUDE_DOCTESTS',
 )
