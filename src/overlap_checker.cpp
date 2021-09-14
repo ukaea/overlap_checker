@@ -22,7 +22,7 @@
 
 // helper methods to allow fmt to display some OCCT values nicely
 template <> struct fmt::formatter<Bnd_OBB>: formatter<string_view> {
-  // parse is inherited from formatter<string_view>.
+	// parse is inherited from formatter<string_view>.
 	template <typename FormatContext>
 	auto format(Bnd_OBB obb, FormatContext& ctx) {
 		std::stringstream ss;
@@ -172,7 +172,7 @@ main(int argc, char **argv)
 		max_common_volume_ratio = 0.01;
 
 	{
-		CLI::App app{"Perform inprinting of BREP shapes."};
+		CLI::App app{"Perform imprinting of BREP shapes."};
 		app.add_option(
 			"input", path_in,
 			"Path of the input file")
@@ -235,7 +235,7 @@ main(int argc, char **argv)
 	if (max_common_volume_ratio < 0 ||
 		max_common_volume_ratio > 1) {
 		spdlog::critical(
-			"max common volume ratio ({}) should be in (0., 1.) when inprinting",
+			"max common volume ratio ({}) should be in (0., 1.) when imprinting",
 			max_common_volume_ratio);
 		return 1;
 	}
