@@ -11,6 +11,7 @@
 
 #include <CLI/App.hpp>
 #include <CLI/Formatter.hpp>
+#include "CLI/Validators.hpp"
 #include <CLI/Config.hpp>
 
 #include <BRepBndLib.hxx>
@@ -55,7 +56,6 @@ template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
 
 struct worker_input {
 	size_t hi, lo;
-	double fuzzy_value;
 };
 
 struct worker_output {
@@ -113,7 +113,8 @@ public:
 };
 
 static void
-shape_classifier(const document &doc, worker_queue &queue)
+shape_classifier(
+	const document &doc, worker_queue &queue, std::vector<double> &fuzzy_values)
 {
 	spdlog::debug("worker thread starting");
 
@@ -126,15 +127,30 @@ shape_classifier(const document &doc, worker_queue &queue)
 		const auto &shape = shapes[output.hi = input.hi];
 		const auto &tool = shapes[output.lo = input.lo];
 
-		output.result = classify_solid_intersection(
-			shape, tool, input.fuzzy_value);
+		bool first = true;
+		for (const auto fuzzy_value : fuzzy_values) {
+			if (!first) {
+				spdlog::info(
+					"{:5}-{:<5} imprint failed with ({} filler and {} common) warnings, retrying with tolerance={}",
+					input.hi, input.lo,
+					output.result.num_filler_warnings, output.result.num_common_warnings,
+					fuzzy_value);
+			}
 
-		// try again with less fuzz
+			output.result = classify_solid_intersection(
+				shape, tool, fuzzy_value);
+
+			// try again with less fuzz
+			if (output.result.status != intersect_status::failed) {
+				break;
+			}
+		}
+
 		if (output.result.status == intersect_status::failed) {
-			spdlog::info(
-				"{:5}-{:<5} merge failed with ({} filler and {} common) warnings, retrying with less fuzzyness",
-				input.hi, input.lo, output.result.num_filler_warnings, output.result.num_common_warnings);
-			output.result = classify_solid_intersection(shape, tool, 0);
+			spdlog::warn(
+				"{:5}-{:<5} imprint failed with ({} filler and {} common) warnings",
+				input.hi, input.lo,
+				output.result.num_filler_warnings, output.result.num_common_warnings);
 		}
 
 		queue.add_output(output);
@@ -164,12 +180,12 @@ main(int argc, char **argv)
 	configure_spdlog();
 
 	std::string path_in;
-	unsigned num_parallel = 4;
+	unsigned num_parallel;
 	bool perform_geometry_checks{true};
 	double
 		bbox_clearance = 0.5,
-		imprint_tolerance = 0.001,
 		max_common_volume_ratio = 0.01;
+	std::vector<double> imprint_tolerances = {0.001, 0};
 
 	{
 		CLI::App app{"Perform imprinting of BREP shapes."};
@@ -180,30 +196,33 @@ main(int argc, char **argv)
 			->option_text("file.brep");
 		app.add_option(
 			"-j", num_parallel,
-			"Number of threads to parallelise over")
-			->option_text("jobs");
+			"Parallelise over N threads")
+			->option_text("N")
+			->default_val(4)
+			->check(CLI::Range(1, 1024));
 		app.add_flag(
 			"--check-geometry,!--no-check-geometry",
 			perform_geometry_checks,
 			"Check overall validity of shapes");
 		app.add_option(
 			"--bbox-clearance", bbox_clearance,
-			"Bounding-boxes closer than this will be checked for overlaps");
+			"Bounding-boxes closer than C will be checked for overlaps")
+			->option_text("C");
 		app.add_option(
-			"--imprint-tolerance", imprint_tolerance,
-			"Faces, edges, and verticies will be merged when closer than this");
+			"--imprint-tolerance", imprint_tolerances,
+			"Faces, edges, and verticies will be merged when closer than T")
+			->option_text("T")
+			->expected(1, 10);
+		app.add_option(
+			"--max-common-volume-ratio", max_common_volume_ratio,
+			"Imprinted volume with ratio <R is considered acceptable")
+			->option_text("R")
+			->check(CLI::Range(0., 1.));
 		CLI11_PARSE(app, argc, argv);
 	}
 
 	// make sure parameters are sane!
-	if (num_parallel > 1024) {
-		spdlog::critical("using >1024 threads is currently unsupported");
-		return 1;
-	} else if (num_parallel == 0) {
-		// might want to properly handle this by not using threads, but this
-		// is enough to get it working
-		num_parallel = 1;
-	} else {
+	{
 		unsigned max_parallel = std::thread::hardware_concurrency();
 		if (max_parallel && num_parallel > max_parallel * 2) {
 			spdlog::warn(
@@ -219,25 +238,19 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	if (imprint_tolerance < 0) {
-		spdlog::critical(
-			"imprinting tolerance ({}) should not be negative",
-			imprint_tolerance);
-		return 1;
-	}
+	for (const auto tolerance : imprint_tolerances) {
+		if (tolerance < 0) {
+			spdlog::critical(
+				"imprinting tolerance should not be negative, {} < 0",
+				tolerance);
+			return 1;
+		}
 
-	if (bbox_clearance < imprint_tolerance) {
-		spdlog::warn(
-			"bbox clearance ({}) smaller than imprinting tolerance ({})",
-			bbox_clearance, imprint_tolerance);
-	}
-
-	if (max_common_volume_ratio < 0 ||
-		max_common_volume_ratio > 1) {
-		spdlog::critical(
-			"max common volume ratio ({}) should be in (0., 1.) when imprinting",
-			max_common_volume_ratio);
-		return 1;
+		if (bbox_clearance < tolerance) {
+			spdlog::warn(
+				"bbox clearance smaller than imprinting tolerance, {} < {}",
+				bbox_clearance, tolerance);
+		}
 	}
 
 	document doc;
@@ -278,7 +291,7 @@ main(int argc, char **argv)
 				continue;
 			}
 
-			worker_input work{hi, lo, imprint_tolerance};
+			worker_input work{hi, lo};
 			queue.add_work(work);
 		}
 	}
@@ -292,7 +305,7 @@ main(int argc, char **argv)
 		spdlog::debug("launching worker threads");
 		std::vector<std::thread> threads;
 		for (unsigned i = 0; i < num_parallel; i++) {
-			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue));
+			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue), std::ref(imprint_tolerances));
 		}
 		spdlog::debug("waiting for results from workers");
 
