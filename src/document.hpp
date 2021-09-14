@@ -9,8 +9,8 @@ double distance_between_shapes(const TopoDS_Shape& a, const TopoDS_Shape& b);
 struct document {
 	std::vector<TopoDS_Shape> solid_shapes;
 
-	// these just abort on errors, will do something better when it's clear
-	// what that is!
+	// these just exit on error, will do something better when it's clear what
+	// that is!
 	void load_brep_file(const char* path);
 
 	size_t count_invalid_shapes();

@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <string>
 
-#include <fmt/format.h>
+#include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
 #include <CLI/App.hpp>

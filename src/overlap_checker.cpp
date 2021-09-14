@@ -6,7 +6,7 @@
 #include <mutex>
 #include <condition_variable>
 
-#include <fmt/format.h>
+#include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
 #include <CLI/App.hpp>

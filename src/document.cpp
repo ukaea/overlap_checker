@@ -1,9 +1,11 @@
+#include <cstdlib>
+
 #ifdef INCLUDE_DOCTESTS
 #include <doctest/doctest.h>
 #endif
 
+#include <fmt/core.h>
 #include <fmt/ranges.h>
-
 #include <spdlog/spdlog.h>
 
 #include <BOPAlgo_PaveFiller.hxx>
@@ -116,12 +118,12 @@ document::load_brep_file(const char* path)
 
 	if (!BRepTools::Read(shape, path, builder)) {
 		spdlog::critical("unable to read BREP file");
-		std::abort();
+		std::exit(1);
 	}
 
 	if (shape.ShapeType() != TopAbs_COMPSOLID) {
 		spdlog::critical("expected to get COMPSOLID toplevel shape from brep file");
-		std::abort();
+		std::exit(1);
 	}
 
 	spdlog::debug("expecting {} solid shapes", shape.NbChildren());
@@ -131,7 +133,7 @@ document::load_brep_file(const char* path)
 		const auto &shp = it.Value();
 		if (shp.ShapeType() != TopAbs_SOLID) {
 			spdlog::critical("expecting shape to be a solid");
-			std::abort();
+			std::exit(1);
 		}
 
 		solid_shapes.push_back(shp);
