@@ -148,7 +148,7 @@ class collector {
 	TopoDS_Builder builder;
 	TopoDS_CompSolid merged;
 
-	double minimum_shape_volume;
+	double minimum_volume;
 
 	int label_num, n_solid, n_small;
 
@@ -171,11 +171,11 @@ class collector {
 		// add the solids to our list of things to do
 		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
 			const auto volume = volume_of_shape(shape);
-			if (volume < minimum_shape_volume) {
+			if (volume < minimum_volume) {
 				n_small += 1;
 				spdlog::info(
 					"ignoring part of shape {} because it's too small, {} < {}",
-					label_name, volume, minimum_shape_volume);
+					label_name, volume, minimum_volume);
 				continue;
 			}
 
@@ -189,8 +189,8 @@ class collector {
 	}
 
 public:
-	collector(double minimum_shape_volume) :
-		minimum_shape_volume{minimum_shape_volume},
+	collector(double minimum_volume) :
+		minimum_volume{minimum_volume},
 		label_num{0}, n_solid{0}, n_small{0} {
 		builder.MakeCompSolid(merged);
 	}
@@ -274,7 +274,7 @@ main(int argc, char **argv)
 	configure_spdlog();
 
 	std::string path_in, path_out;
-	double minimum_shape_volume = 1;
+	double minimum_volume = 1;
 
 	{
 		CLI::App app{"Convert STEP files to BREP format for preprocessor."};
@@ -284,11 +284,18 @@ main(int argc, char **argv)
 		app.add_option("output", path_out, "Path of the output file")
 			->required()
 			->option_text("file.brep");
-		app.add_option("--min-shape-vol,-v", minimum_shape_volume, "Minimum shape volume, in mm^3");
+		app.add_option("--min-volume,-v", minimum_volume, "Minimum shape volume, in mm^3");
 		CLI11_PARSE(app, argc, argv);
 	}
 
-	collector doc(minimum_shape_volume);
+	if (minimum_volume < 0) {
+		spdlog::critical(
+			"minimum shape volume ({}) should not be negative",
+			minimum_volume);
+		return 1;
+	}
+
+	collector doc(minimum_volume);
 	load_step_file(path_in.c_str(), doc);
 
 	doc.log_summary();
