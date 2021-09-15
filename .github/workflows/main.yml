@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-21.04
     steps:
     - uses: actions/checkout@v2
     - name: Install system packages
