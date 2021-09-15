@@ -1,13 +1,13 @@
-This repository contains code to validate and preprocess CAD files
-(e.g. STEP files, as produced by FreeCad) for integration into
-modelling workflows, for example simulation in OpenMC.
+This project contains code to validate and preprocess CAD files (e.g.
+STEP files, as produced by FreeCad) for integration into modelling
+workflows, for example simulation in OpenMC.
 
 
 # Building
 
-Building currently requires Python 3 and a recent version of
-OpenCascade to be installed on your system. Under ArchLinux I can
-install opencascade and :
+Building currently requires Python and a recent version of OpenCascade
+headers and libraries to be installed on your system. Both can be
+installed under ArchLinux by running:
 
 ```shell
 pacman -S python opencascade
@@ -16,8 +16,8 @@ pacman -S python opencascade
 I'll fill in instructions for other distributions / OSs as I get them
 working.  Suggestions welcome!
 
-After this, I use Python to instal the required build tools, then use
-conan to install the required dependencies.
+Python is used to install the required build tools. One of these is
+conan which allows us to fetch the required dependencies.
 
 ```shell
 # install build tools, maybe in a seperate venv
@@ -33,9 +33,8 @@ conan install --build=cli11 cli11/2.0.0@
 conan install --build=doctest doctest/2.4.6@
 ```
 
-Now that we've got the required dependencies set up, we use meson to
-set up the build files for ninja, and finally use ninja to build the
-code:
+Now that we've got the dependencies locally, meson is used to set up
+the build files for ninja, and finally ninja to build the code:
 
 ```shell
 # set up build directory
