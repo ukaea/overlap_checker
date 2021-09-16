@@ -5,36 +5,36 @@ workflows, for example simulation in OpenMC.
 
 # Building
 
-Building currently requires Python and a recent version of OpenCascade
-headers and libraries to be installed on your system. Both can be
-installed under ArchLinux by running:
+Building currently requires a recent version of OpenCascade's headers
+and libraries to be installed on your system, along with CMake and
+Python.
+
+Under Debian/Ubuntu these can be installed by running:
 
 ```shell
-pacman -S python opencascade
+apt-get install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
 ```
 
-I'll fill in instructions for other distributions / OSs as I get them
-working.  Suggestions welcome!
+Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
+20.04 LTS is known to fail due to the library being too old.
 
-Python is used to install the required build tools. One of these is
-conan which allows us to fetch the required dependencies.
+Under ArchLinux the dependencies would be installed via:
+
+```shell
+pacman -S cmake python opencascade
+```
+
+Once these have been installed, we can use Python to fetch our build
+tools. Note, I'd suggest doing this in a [virtual environment][pyvenv]
+to keep them tidy.
 
 ```shell
 # install build tools, maybe in a seperate venv
 pip install -U conan meson ninja
-
-# if you want to use clangd for IDE integration, setting these might help
-export CC=clang CXX=clang++
-
-# pre-built packages don't exist for me, so I do
-conan install --build=fmt fmt/8.0.1@
-conan install --build=spdlog spdlog/1.9.2@
-conan install --build=cli11 cli11/2.0.0@
-conan install --build=doctest doctest/2.4.6@
 ```
 
-Now that we've got the dependencies locally, meson is used to set up
-the build files for ninja, and finally ninja to build the code:
+Meson is used for build configuration, calling out to Conan for C++
+package management. Ninja is used as a modern replacement for make.
 
 ```shell
 # set up build directory
@@ -48,9 +48,26 @@ ninja
 ./test_runner
 ```
 
-Note that meson makes `build/compile_commands.json` which can be
-pulled in by your IDE to provide type information and autocompletions.
+While developing, just running `ninja` should be enough. It should
+automatically run Meson if it needs to.
 
+## Notes
+
+ * Some editors use `clangd` to provide autocompletions and other
+   helpful tools, using the Clang compiler can help with this.
+ * Prebuilt Conan binaries are only available for some systems, so you
+   might need to explicitly build them.
+
+These can be accomplished with:
+
+```shell
+export CC=clang CXX=clang++
+
+conan install --build=fmt fmt/8.0.1@
+conan install --build=spdlog spdlog/1.9.2@
+conan install --build=cli11 cli11/2.0.0@
+conan install --build=doctest doctest/2.4.6@
+```
 
 # Running
 
@@ -60,19 +77,19 @@ workflows, they are:
  * `step_to_brep` extracts the solid shapes out of a STEP file and
    write them to a BREP file, along with CSV output of labels,
    material, and colour information.
-
  * `overlap_checker` performs pairwise checks on the above output,
    writing out a CSV file listing when solids touch or overlap.
-
  * `overlap_collecter` collect intersections between solids and write
    out to BREP file.
 
-
-For example, to check `input.step` for overlapping solids and writing
-out intersections to `common.brep`, you can do:
+For example, to check the included `test_geometry.step` for
+overlapping solids and writing out intersections to `common.brep`, you
+can do:
 
 ```shell
-step_to_brep input.step input.brep > shapes.csv
-overlap_checker -j8 input.brep > overlaps.csv
-grep overlap overlaps.csv | overlap_collecter input.brep common.brep
+step_to_brep ../data/test_geometry.step solids.brep > shapes.csv
+overlap_checker -j8 solids.brep > overlaps.csv
+grep overlap overlaps.csv | overlap_collecter solids.brep common.brep
 ```
+
+[pyvenv]: https://docs.python.org/3/tutorial/venv.html

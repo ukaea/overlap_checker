@@ -37,7 +37,7 @@ main(int argc, char **argv)
 	}
 
 	document doc;
-	doc.load_brep_file("input.brep");
+	doc.load_brep_file(path_in);
 
 	TopoDS_Builder builder;
 	TopoDS_Compound merged;
