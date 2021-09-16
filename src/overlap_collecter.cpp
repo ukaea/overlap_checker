@@ -37,7 +37,7 @@ main(int argc, char **argv)
 	}
 
 	document doc;
-	doc.load_brep_file(path_in);
+	doc.load_brep_file(path_in.c_str());
 
 	TopoDS_Builder builder;
 	TopoDS_Compound merged;
@@ -119,6 +119,7 @@ main(int argc, char **argv)
 		builder.Add(merged, op.Shape());
 	}
 
+	spdlog::info("writing brep file {}", path_out);
 	if (!BRepTools::Write(merged, path_out.c_str())) {
 		spdlog::critical("failed to write brep file");
 		return 1;
