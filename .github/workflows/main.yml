@@ -3,16 +3,17 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-21.04
+    runs-on: ubuntu-latest
+    container: debian:bullseye
     steps:
     - uses: actions/checkout@v2
     - name: Install system packages
       run: |
         sudo apt-get -y update
-        sudo apt-get -y install libocct-foundation-dev libocct-data-exchange-dev
+        sudo apt-get -y install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
     - name: Install build tools
       run: |
-        python -m pip install -U conan meson ninja
+        pip3 install -U conan meson ninja
     - name: Install dependencies via Conan
       run: |
         conan install --build=fmt fmt/8.0.1@
