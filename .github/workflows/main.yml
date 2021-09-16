@@ -23,4 +23,7 @@ jobs:
     - name: Build
       run: |
         meson setup build
-        ninja -C build
+        env -C build ninja
+    - name: Test
+      run: |
+        build/test_runner

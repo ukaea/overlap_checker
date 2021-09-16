@@ -180,7 +180,7 @@ main(int argc, char **argv)
 	configure_spdlog();
 
 	std::string path_in;
-	unsigned num_parallel;
+	unsigned num_parallel_jobs;
 	bool perform_geometry_checks{true};
 	double
 		bbox_clearance = 0.5,
@@ -195,7 +195,7 @@ main(int argc, char **argv)
 			->required()
 			->option_text("file.brep");
 		app.add_option(
-			"-j", num_parallel,
+			"-j", num_parallel_jobs,
 			"Parallelise over N threads")
 			->option_text("N")
 			->default_val(4)
@@ -224,10 +224,10 @@ main(int argc, char **argv)
 	// make sure parameters are sane!
 	{
 		unsigned max_parallel = std::thread::hardware_concurrency();
-		if (max_parallel && num_parallel > max_parallel * 2) {
+		if (max_parallel && num_parallel_jobs > max_parallel * 2) {
 			spdlog::warn(
 				"requesting significantly more than the number of cores ({} > {}) is unlikely to help",
-				num_parallel, max_parallel);
+				num_parallel_jobs, max_parallel);
 		}
 	}
 
@@ -302,9 +302,9 @@ main(int argc, char **argv)
 			num_failed = 0,
 			num_intersected = 0;
 
-		spdlog::debug("launching worker threads");
+		spdlog::info("launching {} worker threads", num_parallel_jobs);
 		std::vector<std::thread> threads;
-		for (unsigned i = 0; i < num_parallel; i++) {
+		for (unsigned i = 0; i < num_parallel_jobs; i++) {
 			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue), std::ref(imprint_tolerances));
 		}
 		spdlog::debug("waiting for results from workers");

@@ -58,10 +58,6 @@ exe = executable('test_runner', ['src/test_runner.cpp', 'src/document.cpp', 'src
 
 test('test', exe)
 
-executable('playing', ['src/playing.cpp', 'src/document.cpp'],
-  dependencies : deps,
-)
-
 executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp', 'src/utils.cpp'],
   dependencies : deps,
   install : true,
