@@ -9,8 +9,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install system packages
       run: |
-        sudo apt-get -y update
-        sudo apt-get -y install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
+        apt-get -y update
+        apt-get -y install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
     - name: Install build tools
       run: |
         pip3 install -U conan meson ninja
