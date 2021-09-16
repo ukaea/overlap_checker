@@ -14,16 +14,14 @@ jobs:
     - name: Install build tools
       run: |
         pip3 install -U conan meson ninja
-    - name: Install dependencies via Conan
+    - name: Configuring Conan
       run: |
-        conan install --build=fmt fmt/8.0.1@
-        conan install --build=spdlog spdlog/1.9.2@
-        conan install --build=cli11 cli11/2.0.0@
-        conan install --build=doctest doctest/2.4.6@
+        conan config init
+        conan profile update settings.compiler.libcxx=libstdc++11 default
     - name: Build
       run: |
         meson setup build
         env -C build ninja
     - name: Test
       run: |
-        build/test_runner
+        env -C build ninja test
