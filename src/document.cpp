@@ -225,9 +225,7 @@ intersect_result classify_solid_intersection(
 
 	{
 		Handle(Message_Report) report = filler.GetReport();
-
 		result.num_filler_warnings = report->GetAlerts(Message_Warning).Size();
-
 		// this report is merged into the following reports
 		report->Clear();
 	}
@@ -376,3 +374,224 @@ TEST_SUITE("testing classify_solid_intersection") {
 }
 #endif
 
+
+static inline bool shape_has_verticies(TopoDS_Shape shape) {
+	TopExp_Explorer ex;
+	ex.Init(shape, TopAbs_VERTEX);
+	return ex.More();
+}
+
+
+imprint_result perform_solid_imprinting(
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value)
+{
+	imprint_result result = {
+		imprint_status::failed,
+		// fuzzy value
+		0.0,
+		// number of warnings
+		0, 0, 0,
+		// volumes
+		-1.0, -1.0, -1.0,
+		// shapes
+		{}, {},
+	};
+
+	BOPAlgo_PaveFiller filler;
+
+	{
+		TopTools_ListOfShape args;
+		args.Append(shape);
+		args.Append(tool);
+		filler.SetArguments(args);
+	}
+
+	filler.SetRunParallel(false);
+	filler.SetFuzzyValue(fuzzy_value);
+	filler.SetNonDestructive(true);
+
+	// this can be a very expensive call, e.g. 10+ seconds
+	filler.Perform();
+
+	{
+		Handle(Message_Report) report = filler.GetReport();
+		result.num_filler_warnings = report->GetAlerts(Message_Warning).Size();
+		// this report is merged into the following reports
+		report->Clear();
+	}
+
+	result.fuzzy_value = filler.FuzzyValue();
+
+	if (filler.HasErrors()) {
+		return result;
+	}
+
+	TopoDS_Shape common;
+
+	{
+		BRepAlgoAPI_Section op{shape, tool, filler, false};
+		op.SetRunParallel(false);
+		op.SetFuzzyValue(filler.FuzzyValue());
+		op.SetNonDestructive(true);
+		op.SimplifyResult();
+
+		op.SetOperation(BOPAlgo_COMMON);
+		op.Build();
+
+		result.num_common_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+		if (op.HasErrors()) {
+			return result;
+		}
+		common = op.Shape();
+		result.vol_common = volume_of_shape(common);
+
+		op.SetOperation(BOPAlgo_CUT);
+		op.Build();
+		if (op.HasErrors()) {
+			return result;
+		}
+		result.shape = op.Shape();
+		result.vol_cut = volume_of_shape(result.shape);
+
+		op.SetOperation(BOPAlgo_CUT21);
+		op.Build();
+		if (op.HasErrors()) {
+			return result;
+		}
+		result.tool = op.Shape();
+		result.vol_cut12 = volume_of_shape(result.tool);
+	}
+
+	if (!shape_has_verticies(common)) {
+		result.status = imprint_status::distinct;
+	} else {
+		// merge the common volume into the larger shape
+		bool merge_into_shape = result.vol_cut >= result.vol_cut12;
+
+		BRepAlgoAPI_Fuse op;
+		op.SetRunParallel(false);
+		op.SimplifyResult();
+
+		// fuzzy stuff has already been done so no need to introduce more error
+		// op.SetFuzzyValue(filler.FuzzyValue());
+
+		// the above created distinct shapes, so we are free to modify here
+		// op.SetNonDestructive(true);
+
+		{
+			TopTools_ListOfShape args;
+			args.Append(merge_into_shape ? result.shape : result.tool);
+			op.SetArguments(args);
+
+			args.Clear();
+			args.Append(common);
+			op.SetTools(args);
+		}
+
+		op.Build();
+		result.num_fuse_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+		if (op.HasErrors()) {
+			return result;
+		}
+
+		if (merge_into_shape) {
+			result.status = imprint_status::merge_into_shape;
+			result.shape = op.Shape();
+		} else {
+			result.status = imprint_status::merge_into_tool;
+			result.tool = op.Shape();
+		}
+	}
+
+	return result;
+}
+
+#ifdef DOCTEST_LIBRARY_INCLUDED
+#include <BRepPrimAPI_MakeBox.hxx>
+
+TEST_SUITE("testing merge_into_first") {
+	TEST_CASE("two identical objects") {
+		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
+
+		const auto res = perform_solid_imprinting(s1, s2, 0.5);
+
+		switch (res.status) {
+		case imprint_status::merge_into_shape:
+			CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(10*10*10));
+			CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(0));
+			break;
+		case imprint_status::merge_into_tool:
+			CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(0));
+			CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(10*10*10));
+			break;
+		default:
+			// unreachable if working
+			REQUIRE(false);
+		}
+
+		CHECK_EQ(res.vol_common, doctest::Approx(10*10*10));
+		CHECK_EQ(res.vol_cut, 0);
+		CHECK_EQ(res.vol_cut12, 0);
+	}
+
+	TEST_CASE("two independent objects") {
+		const auto s1 = cube_at(0, 0, 0, 4), s2 = cube_at(5, 0, 0, 4);
+
+		const auto res = perform_solid_imprinting(s1, s2, 0.5);
+		REQUIRE_EQ(res.status, imprint_status::distinct);
+
+		CHECK_EQ(res.vol_common, 0);
+		CHECK_EQ(res.vol_cut, doctest::Approx(4*4*4));
+		CHECK_EQ(res.vol_cut12, doctest::Approx(4*4*4));
+
+		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(4*4*4));
+		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(4*4*4));
+	}
+
+	TEST_CASE("two touching objects") {
+		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(5, 0, 0, 5);
+
+		const auto res = perform_solid_imprinting(s1, s2, 0.5);
+		REQUIRE_EQ(res.status, imprint_status::distinct);
+
+		CHECK_EQ(res.vol_common, 0);
+		CHECK_EQ(res.vol_cut, doctest::Approx(5*5*5));
+		CHECK_EQ(res.vol_cut12, doctest::Approx(5*5*5));
+
+		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(5*5*5));
+		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(5*5*5));
+	}
+
+	TEST_CASE("two objects overlapping at corner") {
+		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(4, 4, 4, 2);
+
+		const auto res = perform_solid_imprinting(s1, s2, 0.1);
+		REQUIRE_EQ(res.status, imprint_status::merge_into_shape);
+
+		CHECK_EQ(res.vol_common, doctest::Approx(1));
+		CHECK_EQ(res.vol_cut, doctest::Approx(5*5*5-1));
+		CHECK_EQ(res.vol_cut12, doctest::Approx(2*2*2-1));
+
+		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(5*5*5));
+		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(2*2*2-1));
+	}
+
+	TEST_CASE("two objects overlapping in middle") {
+		// s1 should divide s2 in half, one of these halves should be merged
+		// into s1
+		const auto s1 = cube_at(3, 1, 1, 2), s2 = cube_at(0, 0, 0, 4);
+
+		const auto res = perform_solid_imprinting(s1, s2, 0.1);
+		REQUIRE_EQ(res.status, imprint_status::merge_into_tool);
+
+		const double half_s1 = 2*2*2 / 2.;
+		CHECK_EQ(res.vol_common, doctest::Approx(half_s1));
+		CHECK_EQ(res.vol_cut, doctest::Approx(half_s1));
+		CHECK_EQ(res.vol_cut12, doctest::Approx(4*4*4 - half_s1));
+
+		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(half_s1));
+		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(4*4*4));
+	}
+}
+
+#endif
