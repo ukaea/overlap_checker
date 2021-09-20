@@ -75,7 +75,7 @@ are_vals_close(const double a, const double b, const double drel, const double d
 }
 
 #ifdef DOCTEST_LIBRARY_INCLUDED
-TEST_SUITE("testing are_vals_close") {
+TEST_SUITE("are_vals_close") {
 	TEST_CASE("identical values") {
 		CHECK(are_vals_close(0, 0));
 		CHECK(are_vals_close(1, 1));
@@ -131,7 +131,7 @@ bool size_t_of_string(const char *s, size_t &i, int base)
 }
 
 #ifdef DOCTEST_LIBRARY_INCLUDED
-TEST_SUITE("testing int_of_string") {
+TEST_SUITE("int_of_string") {
 	TEST_CASE("success") {
 		int val = -1;
 		CHECK(int_of_string("0", val));
@@ -153,7 +153,7 @@ TEST_SUITE("testing int_of_string") {
 		CHECK_EQ(val, -1);
 	}
 }
-TEST_SUITE("testing size_t_of_string") {
+TEST_SUITE("size_t_of_string") {
 	TEST_CASE("success") {
 		size_t val = 1;
 		CHECK(size_t_of_string("0", val));
@@ -240,7 +240,7 @@ vectors_eq(const std::vector<T> &a, const std::vector<T> &b)
 		std::equal(a.begin(), a.end(), b.begin());
 }
 
-TEST_SUITE("testing parse_csv_row") {
+TEST_SUITE("parse_csv_row") {
 	TEST_CASE("validate vectors_eq") {
 		CHECK(vectors_eq<int>({}, {}));
 		CHECK(vectors_eq<int>({0}, {0}));

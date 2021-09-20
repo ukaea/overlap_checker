@@ -151,7 +151,7 @@ is_shape_valid(const TopoDS_Shape& shape)
 	const auto &result = checker.Result(shape);
 
 	std::vector<BRepCheck_Status> errors;
-	for (const auto &status : result->StatusOnShape()) {
+	for (const auto status : result->StatusOnShape()) {
 		if (status != BRepCheck_NoError) {
 			errors.push_back(status);
 		}
@@ -179,7 +179,8 @@ is_shape_valid(const TopoDS_Shape& shape)
 }
 
 size_t
-document::count_invalid_shapes() {
+document::count_invalid_shapes()
+{
 	size_t num_invalid = 0;
 	for (const auto &shape : solid_shapes) {
 		if (!is_shape_valid(shape)) {
@@ -189,6 +190,17 @@ document::count_invalid_shapes() {
 	return num_invalid;
 }
 
+static inline bool
+collect_warnings(const Message_Report *report, int &warnings)
+{
+	if (report) {
+		warnings = report->GetAlerts(Message_Warning).Size();
+		return true;
+	} else {
+		return false;
+	}
+}
+
 intersect_result classify_solid_intersection(
 	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value)
 {
@@ -196,10 +208,8 @@ intersect_result classify_solid_intersection(
 		intersect_status::failed,
 		// fuzzy value
 		0.0,
-
 		// number of warnings
 		0, 0, 0,
-
 		// volumes
 		-1.0, -1.0, -1.0,
 	};
@@ -208,6 +218,9 @@ intersect_result classify_solid_intersection(
 	// operations, at a minimum we want to perform sectioning and getting any
 	// common solid
 	BOPAlgo_PaveFiller filler;
+	filler.SetRunParallel(false);
+	filler.SetFuzzyValue(fuzzy_value);
+	filler.SetNonDestructive(true);
 
 	{
 		TopTools_ListOfShape args;
@@ -216,16 +229,12 @@ intersect_result classify_solid_intersection(
 		filler.SetArguments(args);
 	}
 
-	filler.SetRunParallel(false);
-	filler.SetFuzzyValue(fuzzy_value);
-	filler.SetNonDestructive(true);
-
 	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
 
 	{
 		Handle(Message_Report) report = filler.GetReport();
-		result.num_filler_warnings = report->GetAlerts(Message_Warning).Size();
+		collect_warnings(report.get(), result.num_filler_warnings);
 		// this report is merged into the following reports
 		report->Clear();
 	}
@@ -247,9 +256,7 @@ intersect_result classify_solid_intersection(
 	op.SetNonDestructive(true);
 
 	op.Build();
-
-	result.num_common_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
-
+	collect_warnings(op.GetReport().get(), result.num_common_warnings);
 	if (op.HasErrors()) {
 		return result;
 	}
@@ -279,8 +286,7 @@ intersect_result classify_solid_intersection(
 
 	op.SetOperation(BOPAlgo_SECTION);
 	op.Build();
-
-	result.num_section_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+	collect_warnings(op.GetReport().get(), result.num_section_warnings);
 	if (!op.HasErrors()) {
 		ex.Init(op.Shape(), TopAbs_VERTEX);
 		result.status = ex.More() ? intersect_status::touching : intersect_status::distinct;
@@ -298,7 +304,7 @@ cube_at(double x, double y, double z, double length)
 	return BRepPrimAPI_MakeBox(gp_Pnt(x, y, z), length, length, length).Shape();
 }
 
-TEST_SUITE("testing classify_solid_intersection") {
+TEST_SUITE("classify_solid_intersection") {
 	TEST_CASE("two identical objects completely overlap") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
@@ -374,13 +380,12 @@ TEST_SUITE("testing classify_solid_intersection") {
 }
 #endif
 
-
-static inline bool shape_has_verticies(TopoDS_Shape shape) {
+static inline bool shape_has_verticies(TopoDS_Shape shape)
+{
 	TopExp_Explorer ex;
 	ex.Init(shape, TopAbs_VERTEX);
 	return ex.More();
 }
-
 
 imprint_result perform_solid_imprinting(
 	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value)
@@ -398,6 +403,9 @@ imprint_result perform_solid_imprinting(
 	};
 
 	BOPAlgo_PaveFiller filler;
+	filler.SetRunParallel(false);
+	filler.SetFuzzyValue(fuzzy_value);
+	filler.SetNonDestructive(true);
 
 	{
 		TopTools_ListOfShape args;
@@ -406,22 +414,17 @@ imprint_result perform_solid_imprinting(
 		filler.SetArguments(args);
 	}
 
-	filler.SetRunParallel(false);
-	filler.SetFuzzyValue(fuzzy_value);
-	filler.SetNonDestructive(true);
-
 	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
 
 	{
 		Handle(Message_Report) report = filler.GetReport();
-		result.num_filler_warnings = report->GetAlerts(Message_Warning).Size();
+		collect_warnings(report.get(), result.num_filler_warnings);
 		// this report is merged into the following reports
 		report->Clear();
 	}
 
 	result.fuzzy_value = filler.FuzzyValue();
-
 	if (filler.HasErrors()) {
 		return result;
 	}
@@ -437,8 +440,7 @@ imprint_result perform_solid_imprinting(
 
 		op.SetOperation(BOPAlgo_COMMON);
 		op.Build();
-
-		result.num_common_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+		collect_warnings(op.GetReport().get(), result.num_common_warnings);
 		if (op.HasErrors()) {
 			return result;
 		}
@@ -466,7 +468,7 @@ imprint_result perform_solid_imprinting(
 		result.status = imprint_status::distinct;
 	} else {
 		// merge the common volume into the larger shape
-		bool merge_into_shape = result.vol_cut >= result.vol_cut12;
+		const bool merge_into_shape = result.vol_cut >= result.vol_cut12;
 
 		BRepAlgoAPI_Fuse op;
 		op.SetRunParallel(false);
@@ -474,7 +476,6 @@ imprint_result perform_solid_imprinting(
 
 		// fuzzy stuff has already been done so no need to introduce more error
 		// op.SetFuzzyValue(filler.FuzzyValue());
-
 		// the above created distinct shapes, so we are free to modify here
 		// op.SetNonDestructive(true);
 
@@ -489,7 +490,7 @@ imprint_result perform_solid_imprinting(
 		}
 
 		op.Build();
-		result.num_fuse_warnings = op.GetReport()->GetAlerts(Message_Warning).Size();
+		collect_warnings(op.GetReport().get(), result.num_fuse_warnings);
 		if (op.HasErrors()) {
 			return result;
 		}
@@ -509,7 +510,7 @@ imprint_result perform_solid_imprinting(
 #ifdef DOCTEST_LIBRARY_INCLUDED
 #include <BRepPrimAPI_MakeBox.hxx>
 
-TEST_SUITE("testing merge_into_first") {
+TEST_SUITE("perform_solid_imprinting") {
 	TEST_CASE("two identical objects") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
