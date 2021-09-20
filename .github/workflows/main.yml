@@ -13,7 +13,7 @@ jobs:
         apt-get -y install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
     - name: Install build tools
       run: |
-        pip3 install -U conan meson ninja
+        pip3 install --no-cache-dir -U conan meson ninja
     - name: Configuring Conan
       run: |
         conan config init
