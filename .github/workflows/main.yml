@@ -20,8 +20,8 @@ jobs:
         conan profile update settings.compiler.libcxx=libstdc++11 default
     - name: Build
       run: |
-        meson setup build
-        env -C build ninja
+        meson setup build -Dcpp_flags=-I/usr/include/opencascade
+        ninja -C build
     - name: Test
       run: |
-        env -C build ninja test
+        ninja -C build test

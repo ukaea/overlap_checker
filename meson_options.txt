@@ -1,0 +1,1 @@
+option('use_conan', type: 'boolean', value: true)

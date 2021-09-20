@@ -38,18 +38,37 @@ package management. Ninja is used as a modern replacement for make.
 
 ```shell
 # set up build directory
-meson setup build
+CXXFLAGS=-I/usr/include/opencascade meson setup build
 
 # build code
-cd build
-ninja
+ninja -C build
 
 # run tests
-./test_runner
+build/test_runner
 ```
 
 While developing, just running `ninja` should be enough. It should
 automatically run Meson if it needs to.
+
+## Bring-your-own package manager
+
+If you don't want to use Conan to install the above dependencies you
+can use do it yourself, or use your operating system's one if it has
+them, and disable conan passing `-Duse_conan=false` to Meson by
+running:
+
+```shell
+CXXFLAGS=-I/usr/include/opencascade meson setup build -Duse_conan=false
+```
+
+This can be used to allow Conda to fetch the dependencies, like:
+
+```shell
+conda install ninja meson fmt spdlog cli11 doctest
+
+env CXXFLAGS=-I/opt/conda/include/opencascade LDFLAGS=-L/opt/conda/lib \
+  meson setup build -Duse_conan=false
+```
 
 ## Notes
 

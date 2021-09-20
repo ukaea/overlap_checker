@@ -1,6 +1,6 @@
 project('parallel-preprocessor', 'cpp',
   version : '0.1',
-  default_options : ['warning_level=3', 'cpp_std=c++17'])
+  default_options : ['warning_level=2', 'cpp_std=c++17'])
 
 # opencascade preprocessor macros result in lots of these
 add_project_arguments(['-Wno-extra-semi', '-Wno-non-virtual-dtor'], language : 'cpp')
@@ -8,48 +8,65 @@ add_project_arguments(['-Wno-extra-semi', '-Wno-non-virtual-dtor'], language : '
 config = configuration_data()
 cxx = meson.get_compiler('cpp')
 
-deps = [
-    dependency('Threads', method: 'cmake'),
+# locate opencascade dependencies, can't see any CMake automatics for this :(
+occt_libs = [
+  'TKernel',
+  'TKBO', 'TKBRep', 'TKPrim',
+  'TKG3d', 'TKLCAF', 'TKMath',
+  'TKTopAlgo', 'TKXCAF', 'TKSTEP',
+  'TKXSBase', 'TKXDESTEP',
 ]
 
-conan = find_program('conan')
-conan_buildtype = config.get('buildtype', get_option('debug') ? 'Debug' : 'Release')
+occt_deps = []
+foreach name : occt_libs
+  occt_deps += cxx.find_library(name)
+endforeach
 
-# key should match "Find*.cmake" file, values are package references
-conan_pkgs = {
+deps = [
+  dependency('threads'),
+  declare_dependency(dependencies: occt_deps)
+]
+
+if get_option('use_conan')
+  conan = find_program('conan')
+  conan_buildtype = config.get('buildtype', get_option('debug') ? 'Debug' : 'Release')
+
+  # key should match "Find*.cmake" file, values are package references
+  conan_pkgs = {
     'fmt': 'fmt/8.0.1',
     'spdlog': 'spdlog/1.9.2',
     'CLI11': 'cli11/2.0.0',
     'doctest': 'doctest/2.4.6',
-}
+  }
 
-foreach pkg_name, conan_ref : conan_pkgs
+  foreach pkg_name, conan_ref : conan_pkgs
     module_path = meson.current_build_dir() / 'conan-cmake' / pkg_name
-    run_command(conan, 'install', conan_ref+'@',
-        '-if', module_path,
-        '-g', 'cmake_find_package',
-        '-s:b', 'build_type='+conan_buildtype,
-        check: true
+    run_command(
+      conan, 'install', conan_ref+'@',
+      '-if', module_path,
+      '-g', 'cmake_find_package',
+      '-s:b', 'build_type='+conan_buildtype,
+      check: true
     )
     deps += dependency(pkg_name, method: 'cmake', cmake_module_path: module_path)
-endforeach
-
-# locate opencascade dependencies, can't see any CMake automatics for this :(
-deps += declare_dependency(
-  dependencies : [
-    cxx.find_library('TKBO'),
-    cxx.find_library('TKBRep'),
-    cxx.find_library('TKPrim'),
-    cxx.find_library('TKG3d'),
-    cxx.find_library('TKLCAF'),
-    cxx.find_library('TKMath'),
-    cxx.find_library('TKTopAlgo'),
-    cxx.find_library('TKXCAF'),
-    cxx.find_library('TKXDESTEP'),
-    cxx.find_library('TKernel'),
-  ],
-  include_directories : ['/usr/include/opencascade'],
-)
+  endforeach
+else
+  # e.g. having installed dependencies via Conda:
+  #
+  #   apt-get update && apt-get install -y libgl1 cmake g++
+  #   conda install ninja meson occt fmt spdlog cli11 doctest
+  #
+  # then set environment variables
+  #
+  #   CXXFLAGS=-I/opt/conda/include/opencascade
+  #   LDFLAGS=-L/opt/conda/lib
+  deps += [
+    dependency('fmt', method: 'cmake'),
+    dependency('spdlog', method: 'cmake'),
+    dependency('CLI11', method: 'cmake'),
+    dependency('doctest', method: 'cmake'),
+  ]
+endif
 
 exe = executable('test_runner', ['src/test_runner.cpp', 'src/document.cpp', 'src/utils.cpp'],
   dependencies : deps,
