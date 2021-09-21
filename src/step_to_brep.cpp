@@ -145,12 +145,11 @@ get_material_info(const TDF_Label &label, std::string &name, double &density)
 }
 
 class collector {
-	TopoDS_Builder builder;
-	TopoDS_CompSolid merged;
+	document doc;
 
 	double minimum_volume;
 
-	int label_num, n_solid, n_small;
+	int label_num, n_small;
 
 	void add_solids(const TDF_Label &label) {
 		std::string color;
@@ -179,8 +178,7 @@ class collector {
 				continue;
 			}
 
-			builder.Add(merged, ex.Current());
-			n_solid += 1;
+			doc.solid_shapes.emplace_back(ex.Current());
 
 			fmt::print(
 				"{},{},{:.1f},{},{},{}\n",
@@ -191,8 +189,7 @@ class collector {
 public:
 	collector(double minimum_volume) :
 		minimum_volume{minimum_volume},
-		label_num{0}, n_solid{0}, n_small{0} {
-		builder.MakeCompSolid(merged);
+		label_num{0}, n_small{0} {
 	}
 
 	void add_label(XCAFDoc_ShapeTool &shapetool, const TDF_Label &label) {
@@ -215,18 +212,14 @@ public:
 	void log_summary() {
 		spdlog::info(
 			"enumerated {} labels, resulting in {} solids",
-			label_num, n_solid);
+			label_num, doc.solid_shapes.size());
 		if (n_small > 0) {
 			spdlog::warn("{} solids were excluded because they were too small", n_small);
 		}
 	}
 
 	void write_brep_file(const char *path) {
-		spdlog::info("writing brep file {}", path);
-		if (!BRepTools::Write(merged, path)) {
-			spdlog::critical("failed to write brep file");
-			std::abort();
-		}
+		doc.write_brep_file(path);
 	}
 };
 

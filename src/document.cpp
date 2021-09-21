@@ -141,6 +141,26 @@ document::load_brep_file(const char* path)
 	}
 }
 
+void
+document::write_brep_file(const char* path) const
+{
+	spdlog::debug("merging {} shapes for writing", solid_shapes.size());
+
+	TopoDS_Compound merged;
+	TopoDS_Builder builder;
+	builder.MakeCompound(merged);
+	for (const auto &shape : solid_shapes) {
+		builder.Add(merged, shape);
+	}
+
+	spdlog::info("writing brep file {}", path);
+
+	if (!BRepTools::Write(merged, path)) {
+		spdlog::critical("failed to write brep file");
+		std::exit(1);
+	}
+}
+
 static bool
 is_shape_valid(const TopoDS_Shape& shape)
 {

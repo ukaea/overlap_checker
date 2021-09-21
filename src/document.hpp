@@ -12,6 +12,7 @@ struct document {
 	// these just exit on error, will do something better when it's clear what
 	// that is!
 	void load_brep_file(const char* path);
+	void write_brep_file(const char* path) const;
 
 	size_t count_invalid_shapes() const;
 

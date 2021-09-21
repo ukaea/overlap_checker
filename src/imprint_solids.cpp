@@ -111,18 +111,7 @@ main(int argc, char **argv)
 		return status;
 	}
 
-	TopoDS_Compound merged;
-	TopoDS_Builder builder;
-	builder.MakeCompound(merged);
-	for (const auto &shape : doc.solid_shapes) {
-		builder.Add(merged, shape);
-	}
-
-	spdlog::info("writing brep file {}", path_out);
-	if (!BRepTools::Write(merged, path_out.c_str())) {
-		spdlog::critical("failed to write brep file");
-		return 1;
-	}
+	doc.write_brep_file(path_out.c_str());
 
 	return 0;
 }
