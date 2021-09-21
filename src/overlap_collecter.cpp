@@ -8,15 +8,66 @@
 #include <CLI/Config.hpp>
 
 #include <TopoDS_Builder.hxx>
-#include <TopoDS_CompSolid.hxx>
+#include <TopoDS_Compound.hxx>
 
-#include "BOPAlgo_PaveFiller.hxx"
-#include "BRepAlgoAPI_Section.hxx"
-#include "BRepTools.hxx"
-#include "TopoDS_Compound.hxx"
+#include <BRepAlgoAPI_Section.hxx>
+#include <BRepTools.hxx>
 
 #include "document.hpp"
 #include "utils.hpp"
+
+static int
+merge_into(const document &doc, TopoDS_Compound &merged)
+{
+	TopoDS_Builder builder;
+	builder.MakeCompound(merged);
+
+	input_status status;
+	std::vector<std::string> fields;
+	while ((status = parse_next_row(std::cin, fields)) == input_status::success) {
+		if (fields.size() < 2) {
+			spdlog::critical("CSV input does not contain two fields");
+			return 1;
+		}
+
+		int first, second;
+
+		if ((first = doc.lookup_solid(fields[0])) < 0) {
+			spdlog::critical("first value ({}) is not a valid shape index", fields[0]);
+			return 1;
+		}
+
+		if ((second = doc.lookup_solid(fields[1])) < 0) {
+			spdlog::critical("second value ({}) is not a valid shape index", fields[1]);
+			return 1;
+		}
+
+		spdlog::info("{:5}-{:<5} processing", first, second);
+
+		// using Section just because it exposes PerformNow
+		BRepAlgoAPI_Section op{
+			doc.solid_shapes[first], doc.solid_shapes[second], false};
+		op.SetOperation(BOPAlgo_COMMON);
+		op.SetFuzzyValue(0);
+		op.SetNonDestructive(true);
+		op.SetRunParallel(false);
+
+		op.Build();
+		if(!op.IsDone()) {
+			spdlog::critical("unable determine solid common to shapes");
+			return 1;
+		}
+
+		builder.Add(merged, op.Shape());
+	}
+
+	if (status == input_status::end_of_file) {
+		return 0;
+	} else {
+		spdlog::critical("failed to read line");
+		return 1;
+	}
+}
 
 int
 main(int argc, char **argv)
@@ -39,84 +90,10 @@ main(int argc, char **argv)
 	document doc;
 	doc.load_brep_file(path_in.c_str());
 
-	TopoDS_Builder builder;
 	TopoDS_Compound merged;
-	builder.MakeCompound(merged);
-
-	std::string row;
-	while (!std::cin.eof()) {
-		std::getline(std::cin, row);
-		// make sure we didn't get a blank line
-		if (std::cin.fail()) {
-			break;
-		}
-		if (std::cin.bad()) {
-			spdlog::critical("failed to read line");
-			return 1;
-		}
-
-		auto fields = parse_csv_row(row);
-
-		if (fields.size() < 2) {
-			spdlog::critical("CSV input does not contain two fields");
-			return 1;
-		}
-
-		int hi, lo;
-		if (!int_of_string(fields[0].c_str(), hi) ||
-			hi < 0 || (size_t)hi >= doc.solid_shapes.size())
-		{
-			spdlog::critical("first value is not a valid shape index");
-			return 1;
-		}
-
-		if (!int_of_string(fields[1].c_str(), lo) ||
-			lo < 0 || (size_t)lo >= doc.solid_shapes.size())
-		{
-			spdlog::critical("second value is not a valid shape index");
-			return 1;
-		}
-
-		spdlog::info("{:5}-{:<5} processing", hi, lo);
-
-		const auto
-			shape = doc.solid_shapes[hi],
-			tool = doc.solid_shapes[lo];
-
-		BOPAlgo_PaveFiller filler;
-
-		{
-			TopTools_ListOfShape args;
-			args.Append(shape);
-			args.Append(tool);
-			filler.SetArguments(args);
-		}
-
-		filler.SetRunParallel(false);
-		filler.SetFuzzyValue(0);
-		filler.SetNonDestructive(true);
-
-		// this can be a very expensive call, e.g. 10+ seconds
-		filler.Perform();
-
-		if(filler.HasErrors()) {
-			spdlog::critical("unable to pave shapes");
-			return 1;
-		}
-
-		BRepAlgoAPI_Section op{shape, tool, filler, false};
-		op.SetOperation(BOPAlgo_COMMON);
-		op.SetFuzzyValue(filler.FuzzyValue());
-		op.SetNonDestructive(true);
-		op.SetRunParallel(false);
-
-		op.Build();
-		if(!op.IsDone()) {
-			spdlog::critical("unable determine solid common to shapes");
-			return 1;
-		}
-
-		builder.Add(merged, op.Shape());
+	const int status = merge_into(doc, merged);
+	if (status != 0) {
+		return status;
 	}
 
 	spdlog::info("writing brep file {}", path_out);

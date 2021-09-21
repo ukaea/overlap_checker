@@ -316,12 +316,12 @@ main(int argc, char **argv)
 
 			switch (output.result.status) {
 			case intersect_status::failed:
-				spdlog::warn("{:5}-{:<5} failed to classify overlap");
+				spdlog::error("{:5}-{:<5} failed to classify overlap");
 				num_failed += 1;
-				continue;
+				break;
 			case intersect_status::distinct:
 				spdlog::debug("{:5}-{:<5} are distinct", hi, lo);
-				continue;
+				break;
 			case intersect_status::touching:
 				fmt::print("{},{},touch\n", hi, lo);
 				break;
@@ -332,7 +332,7 @@ main(int argc, char **argv)
 					max_overlap = min_vol * max_common_volume_ratio;
 
 				if (vol_common > max_overlap) {
-					spdlog::warn(
+					spdlog::error(
 						"{:5}-{:<5} too much overlap ({:.2f}) between shapes ({:.2f}, {:.2f})",
 						hi, lo, vol_common, volumes[hi], volumes[lo]);
 					fmt::print("{},{},bad_overlap\n", hi, lo);
@@ -357,7 +357,7 @@ main(int argc, char **argv)
 		}
 
 		if (num_failed || num_intersected) {
-			spdlog::critical(
+			spdlog::error(
 				"errors occurred while processing, {} failed, {} intersected",
 				num_failed, num_intersected);
 			return 1;

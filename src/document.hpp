@@ -13,7 +13,10 @@ struct document {
 	// that is!
 	void load_brep_file(const char* path);
 
-	size_t count_invalid_shapes();
+	size_t count_invalid_shapes() const;
+
+	// only integer indexes supported at the moment, returns -1 if invalid
+	int lookup_solid(const std::string &str) const;
 };
 
 

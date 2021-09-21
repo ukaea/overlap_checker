@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <string>
 
 #ifdef INCLUDE_DOCTESTS
 #include <doctest/doctest.h>
@@ -263,3 +264,23 @@ TEST_SUITE("parse_csv_row") {
 	}
 }
 #endif
+
+
+input_status
+parse_next_row(std::istream &is, std::vector<std::string> &row)
+{
+	if (is.eof()) {
+		return input_status::end_of_file;
+	}
+	std::string line;
+	if (std::getline(is, line).fail()) {
+		return input_status::end_of_file;
+	}
+	if (is.bad()) {
+		return input_status::error;
+	}
+
+	row = parse_csv_row(line);
+
+	return input_status::success;
+}

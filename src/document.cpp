@@ -35,6 +35,7 @@
 #include <Message_Gravity.hxx>
 
 #include "document.hpp"
+#include "utils.hpp"
 
 
 template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
@@ -179,7 +180,7 @@ is_shape_valid(const TopoDS_Shape& shape)
 }
 
 size_t
-document::count_invalid_shapes()
+document::count_invalid_shapes() const
 {
 	size_t num_invalid = 0;
 	for (const auto &shape : solid_shapes) {
@@ -189,6 +190,20 @@ document::count_invalid_shapes()
 	}
 	return num_invalid;
 }
+
+int
+document::lookup_solid(const std::string &str) const
+{
+	int idx = -1;
+	if (!int_of_string(str.c_str(), idx)) {
+		return -1;
+	}
+	if (idx < 0 || (size_t)idx >= solid_shapes.size()) {
+		return -1;
+	}
+	return idx;
+}
+
 
 static inline bool
 collect_warnings(const Message_Report *report, int &warnings)
