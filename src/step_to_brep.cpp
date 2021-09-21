@@ -149,7 +149,7 @@ class collector {
 
 	double minimum_volume;
 
-	int label_num, n_small;
+	int label_num, n_small, n_negative_volume;
 
 	void add_solids(const TDF_Label &label) {
 		std::string color;
@@ -171,10 +171,17 @@ class collector {
 		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
 			const auto volume = volume_of_shape(shape);
 			if (volume < minimum_volume) {
-				n_small += 1;
-				spdlog::info(
-					"ignoring part of shape {} because it's too small, {} < {}",
-					label_name, volume, minimum_volume);
+				if (volume < 0) {
+					n_negative_volume += 1;
+					spdlog::info(
+						"ignoring part of shape '{}' due to negative volume, {}",
+						label_name, volume);
+				} else {
+					n_small += 1;
+					spdlog::info(
+						"ignoring part of shape '{}' because it's too small, {} < {}",
+						label_name, volume, minimum_volume);
+				}
 				continue;
 			}
 
@@ -189,7 +196,7 @@ class collector {
 public:
 	collector(double minimum_volume) :
 		minimum_volume{minimum_volume},
-		label_num{0}, n_small{0} {
+		label_num{0}, n_small{0}, n_negative_volume{0} {
 	}
 
 	void add_label(XCAFDoc_ShapeTool &shapetool, const TDF_Label &label) {
@@ -215,6 +222,9 @@ public:
 			label_num, doc.solid_shapes.size());
 		if (n_small > 0) {
 			spdlog::warn("{} solids were excluded because they were too small", n_small);
+		}
+		if (n_negative_volume > 0) {
+			spdlog::warn("{} solids were excluded because they had negative volume", n_negative_volume);
 		}
 	}
 
