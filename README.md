@@ -61,12 +61,13 @@ running:
 CXXFLAGS=-I/usr/include/opencascade meson setup build -Duse_conan=false
 ```
 
-This can be used to allow Conda to fetch the dependencies, like:
+This functionality can be used to allow Conda to fetch the
+dependencies then we pull them into Meson via:
 
 ```shell
 conda install ninja meson fmt spdlog cli11 doctest
 
-env CXXFLAGS=-I/opt/conda/include/opencascade LDFLAGS=-L/opt/conda/lib \
+env CXXFLAGS=-I"$CONDA_PREFIX/include/opencascade" LDFLAGS=-L"$CONDA_PREFIX/lib" \
   meson setup build -Duse_conan=false
 ```
 
@@ -86,6 +87,25 @@ conan install --build=fmt fmt/8.0.1@
 conan install --build=spdlog spdlog/1.9.2@
 conan install --build=cli11 cli11/2.0.0@
 conan install --build=doctest doctest/2.4.6@
+```
+
+Within the `condaforge/miniforge3` Docker container, the following
+recipe can be used:
+
+```shell
+# conda compiled OCCT assumes opengl is preinstalled
+apt-get update && apt-get install -y libgl1 cmake g++
+
+# install into base environment
+conda install ninja meson occt fmt spdlog cli11 doctest
+
+# point compiler at conda installed dependencies
+export CXXFLAGS=-I/opt/conda/include/opencascade
+export LDFLAGS=-L/opt/conda/lib"
+
+# configure Ninja and build
+meson setup build -Duse_conan=false
+ninja -C build
 ```
 
 # Running

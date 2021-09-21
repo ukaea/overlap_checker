@@ -51,15 +51,6 @@ if get_option('use_conan')
     deps += dependency(pkg_name, method: 'cmake', cmake_module_path: module_path)
   endforeach
 else
-  # e.g. having installed dependencies via Conda:
-  #
-  #   apt-get update && apt-get install -y libgl1 cmake g++
-  #   conda install ninja meson occt fmt spdlog cli11 doctest
-  #
-  # then set environment variables
-  #
-  #   CXXFLAGS=-I/opt/conda/include/opencascade
-  #   LDFLAGS=-L/opt/conda/lib
   deps += [
     dependency('fmt', method: 'cmake'),
     dependency('spdlog', method: 'cmake'),
@@ -68,24 +59,38 @@ else
   ]
 endif
 
-exe = executable('test_runner', ['src/test_runner.cpp', 'src/document.cpp', 'src/utils.cpp'],
+lib_src = ['src/document.cpp', 'src/utils.cpp']
+
+# including lib_src directly will cause test versions of them to be
+# built, i.e. with preprocessor definion INCLUDE_DOCTESTS
+exe = executable(
+  'test_runner', 'src/test_runner.cpp', lib_src,
   dependencies : deps,
   cpp_args : '-DINCLUDE_DOCTESTS',
 )
 
 test('test', exe)
 
-executable('step_to_brep', ['src/step_to_brep.cpp', 'src/document.cpp', 'src/utils.cpp'],
+# compile non-test version of shared code once, use by all tools
+lib = static_library('shared', lib_src, dependencies : deps)
+
+executable(
+  'step_to_brep', 'src/step_to_brep.cpp',
   dependencies : deps,
   install : true,
+  link_with : lib,
 )
 
-executable('overlap_checker', ['src/overlap_checker.cpp', 'src/document.cpp', 'src/utils.cpp'],
+executable(
+  'overlap_checker', 'src/overlap_checker.cpp',
   dependencies : deps,
   install : true,
+  link_with : lib,
 )
 
-executable('overlap_collecter', ['src/overlap_collecter.cpp', 'src/document.cpp', 'src/utils.cpp'],
+executable(
+  'overlap_collecter', 'src/overlap_collecter.cpp',
   dependencies : deps,
   install : true,
+  link_with : lib,
 )
