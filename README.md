@@ -1,7 +1,7 @@
-This project contains code to validate and preprocess CAD files (e.g.
-STEP files, as produced by FreeCad) for integration into modelling
-workflows, for example simulation in OpenMC.
-
+This project contains a variety of small tools to validate and
+preprocess CAD files (e.g. STEP files, as produced by FreeCad) for
+integration into modelling workflows, for example simulation in
+OpenMC.
 
 # Building
 
@@ -116,19 +116,73 @@ workflows, they are:
  * `step_to_brep` extracts the solid shapes out of a STEP file and
    write them to a BREP file, along with CSV output of labels,
    material, and colour information.
- * `overlap_checker` performs pairwise checks on the above output,
-   writing out a CSV file listing when solids touch or overlap.
+ * `overlap_checker` performs pairwise checks on all solids, writing
+   out a CSV file listing when they touch or overlap.
  * `overlap_collecter` collect intersections between solids and write
    out to BREP file.
+ * `imprint_solids` removes any overlaps from solids, modifying
+   veticies, edges and faces as appropriate.
 
-For example, to check the included `test_geometry.step` for
-overlapping solids and writing out intersections to `common.brep`, you
-can do:
+For example, to run the tools on the included `test_geometry.step`
+file you can do:
 
 ```shell
-step_to_brep ../data/test_geometry.step solids.brep > shapes.csv
-overlap_checker -j8 solids.brep > overlaps.csv
-grep overlap overlaps.csv | overlap_collecter solids.brep common.brep
+# linearise all the shapes in the STEP file so they can be indexed consistantly by subsequent tools
+step_to_brep ../data/test_geometry.step test_geometry.brep > test_geometry.csv
+
+# perform overlap checking using 8 cores
+overlap_checker -j8 test_geometry.brep > overlaps.csv
+
+# collect overlapping solids and write to common.brep
+grep overlap overlaps.csv | overlap_collecter test_geometry.brep common.brep
+
+# perform imprinting
+imprint_solids test_geometry.brep imprinted.brep < overlaps.csv
 ```
+
+# Tool descriptions
+
+In more detail these tools are:
+
+## `step_to_brep`
+
+This tool is the starting point of this toolkit. It recursively
+collects all solid shapes out of a STEP file and writes them out to a
+BREP file. It also tries to collect color and material information
+from the input file and outputs them to standard out, under the
+expectation that this is directed to a file so it can be used by other
+tools.
+
+## `overlap_checker`
+
+This tool performs pairwise comparisons between all nearby solids
+outputting a CSV file for all cases where they touch (i.e. share a
+vertex or edge) or overlap. The user can specify a tolerance that is
+used when comparing shapes allowing small modelling/floating point
+errors (i.e. <0.001mm, see command line) to be considered as
+specifying the "same" thing.
+
+When two solids overlap more than trivially (more than 1%, see command
+line for control over this) then this is determined to be an error
+with the geometry. The resulting non-zero exit status is designed to
+help CI pipelines.
+
+Note that this is a computationally expensive operation so is
+parallelised, you can specify the number of threads to use with the
+`-j` parameter.
+
+## `overlap_collecter`
+
+This tool collects the overlapping area between the shapes specified
+by a CSV file. The overlapping volumes are written to a BREP file
+under the expectation that this is read into a GUI along side the
+original STEP file so highlight where the overlaps occurred.
+
+## `imprint_solids`
+
+This tool tries to clean up any overlapping volumes from solids. This
+uses the same tolerance options as `overlap_checker`, and hence
+vertices/edges of "touching" shapes might move due nearby shapes being
+within this tolerance.
 
 [pyvenv]: https://docs.python.org/3/tutorial/venv.html
