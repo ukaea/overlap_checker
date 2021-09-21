@@ -74,23 +74,31 @@ test('test', exe)
 # compile non-test version of shared code once, use by all tools
 lib = static_library('shared', lib_src, dependencies : deps)
 
+shared_deps = deps + [
+  declare_dependency(link_with : lib)
+]
+
 executable(
   'step_to_brep', 'src/step_to_brep.cpp',
-  dependencies : deps,
+  dependencies : shared_deps,
   install : true,
-  link_with : lib,
 )
 
 executable(
   'overlap_checker', 'src/overlap_checker.cpp',
-  dependencies : deps,
+  dependencies : shared_deps,
+  install : true,
+)
+
+executable(
+  'overlap_collecter', 'src/overlap_collecter.cpp',
+  dependencies : shared_deps,
   install : true,
   link_with : lib,
 )
 
 executable(
-  'overlap_collecter', 'src/overlap_collecter.cpp',
-  dependencies : deps,
+  'imprint_solids', 'src/imprint_solids.cpp',
+  dependencies : shared_deps,
   install : true,
-  link_with : lib,
 )
