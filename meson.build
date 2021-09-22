@@ -6,7 +6,27 @@ project('parallel-preprocessor', 'cpp',
 add_project_arguments(['-Wno-extra-semi', '-Wno-non-virtual-dtor'], language : 'cpp')
 
 config = configuration_data()
-cxx = meson.get_compiler('cpp')
+cpp = meson.get_compiler('cpp')
+
+opencascade = get_option('opencascade')
+conda_prefix = get_option('conda_prefix')
+
+if opencascade != 'auto'
+  occt_include_dir = include_directories(opencascade)
+elif conda_prefix != ''
+  occt_include_dir = include_directories(conda_prefix/'include/opencascade')
+else
+  occt_include_dir = include_directories('/usr/include/opencascade')
+endif
+
+## ensure at least one OCCT header is seen by the compiler
+cpp.has_header_symbol(
+  'Standard_Version.hxx', 'OCC_VERSION', include_directories : occt_include_dir)
+
+occt_lib_dirs = []
+if conda_prefix != ''
+  occt_lib_dirs += conda_prefix/'lib'
+endif
 
 # locate opencascade dependencies, can't see any CMake automatics for this :(
 occt_libs = [
@@ -19,12 +39,15 @@ occt_libs = [
 
 occt_deps = []
 foreach name : occt_libs
-  occt_deps += cxx.find_library(name)
+  occt_deps += cpp.find_library(name, dirs : occt_lib_dirs)
 endforeach
 
 deps = [
   dependency('threads'),
-  declare_dependency(dependencies: occt_deps)
+  declare_dependency(
+    dependencies: occt_deps,
+    include_directories : occt_include_dir,
+  )
 ]
 
 if get_option('use_conan')

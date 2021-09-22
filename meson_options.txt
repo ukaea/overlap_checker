@@ -1,1 +1,3 @@
 option('use_conan', type: 'boolean', value: true)
+option('opencascade', type: 'string', value: 'auto')
+option('conda_prefix', type: 'string', value: '')
