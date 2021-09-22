@@ -59,11 +59,12 @@ to recompile changes to the `overlap_checker` command you could run:
 ninja overlap_checker
 ```
 
-## Conda integration for Blueprint
+## *Experimental* Conda integration for Blueprint
 
 This package is designed to function within the Blueprint ecosystem
-which predominantly uses Conda for package management. This is still
-somewhat experimental, but the following recipe should work:
+which predominantly uses Conda for package management. The following
+recipe should work locally as well as within a `condaforge/miniforge3`
+Docker container:
 
 ```shell
 # ensure system level tools are installed
@@ -81,7 +82,6 @@ CXX=/usr/bin/g++ meson setup build \
   -Dconda_prefix=$CONDA_PREFIX -Duse_conan=false
 
 cd build
-
 
 # compile the code
 meson compile
@@ -119,25 +119,6 @@ conan install --build=fmt fmt/8.0.1@
 conan install --build=spdlog spdlog/1.9.2@
 conan install --build=cli11 cli11/2.0.0@
 conan install --build=doctest doctest/2.4.6@
-```
-
-Within the `condaforge/miniforge3` Docker container, the following
-recipe can be used:
-
-```shell
-# conda compiled OCCT assumes opengl is preinstalled
-apt-get update && apt-get install -y libgl1 cmake g++
-
-# install into base environment
-conda install ninja meson occt fmt spdlog cli11 doctest
-
-# point compiler at conda installed dependencies
-export CXXFLAGS=-I/opt/conda/include/opencascade
-export LDFLAGS=-L/opt/conda/lib"
-
-# configure Ninja and build
-meson setup build -Duse_conan=false
-ninja -C build
 ```
 
 # Running
