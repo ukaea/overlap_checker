@@ -142,7 +142,17 @@ imprint_solids test_geometry.brep imprinted.brep < overlaps.csv
 
 # Tool descriptions
 
-In more detail these tools are:
+Note that all programs support passing the standard Unix `--help` (and
+the terse `-h` variant) to get information about supported command
+line arguments. For example, running:
+
+```shell
+overlap_checker -h
+```
+
+will print out information about how to specify the amount of
+parallelisation to exploit, tolerances on bounding boxes, volumes and
+clearances.
 
 ## `step_to_brep`
 
