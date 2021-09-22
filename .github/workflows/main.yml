@@ -21,7 +21,7 @@ jobs:
     - name: Build
       run: |
         CXXFLAGS=-I/usr/include/opencascade meson setup build
-        meson test -vC build
+        meson compile -C build
     - name: Test
       run: |
-        ninja -C build test
+        meson test -vC build
