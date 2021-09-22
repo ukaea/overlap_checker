@@ -18,57 +18,85 @@ apt-get install cmake python3-pip libocct-foundation-dev libocct-data-exchange-d
 Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
 20.04 LTS is known to fail due to the library being too old.
 
-Under ArchLinux the dependencies would be installed via:
+Under ArchLinux the above dependencies would be installed via:
 
 ```shell
 pacman -S cmake python opencascade
 ```
 
-Once these have been installed, we can use Python to fetch our build
-tools. Note, I'd suggest doing this in a [virtual environment][pyvenv]
-to keep them tidy.
+Following this we use Python to fetch our build tools: Meson is used
+for build configuration, calling out to Conan for C++ package
+management, while Ninja is used as a modern replacement for `make`.
+I'd suggest doing the above in a [virtual environment][pyvenv] to keep
+them tidy.
+
 
 ```shell
 # install build tools, maybe in a seperate venv
 pip install -U conan meson ninja
 ```
 
-Meson is used for build configuration, calling out to Conan for C++
-package management. Ninja is used as a modern replacement for make.
+Finally, we can set up a build directory, compile the code, and run
+the unit tests via:
 
 ```shell
-# set up build directory
-CXXFLAGS=-I/usr/include/opencascade meson setup build
+# set up and enter a build directory
+meson setup build
+cd build
 
-# build code
-ninja -C build
+# compile the code
+meson compile
 
 # run tests
-build/test_runner
+meson test -v
 ```
 
-While developing, just running `ninja` should be enough. It should
-automatically run Meson if it needs to.
-
-## Bring-your-own package manager
-
-If you don't want to use Conan to install the above dependencies you
-can use do it yourself, or use your operating system's one if it has
-them, and disable conan passing `-Duse_conan=false` to Meson by
-running:
+When developing, it's often more convenient to recompile specific
+targets by running `ninja` directly, similar to `make`. For example,
+to recompile changes to the `overlap_checker` command you could run:
 
 ```shell
-CXXFLAGS=-I/usr/include/opencascade meson setup build -Duse_conan=false
+ninja overlap_checker
 ```
 
-This functionality can be used to allow Conda to fetch the
-dependencies then we pull them into Meson via:
+## Conda integration for Blueprint
+
+This package is designed to function within the Blueprint ecosystem
+which predominantly uses Conda for package management. This is still
+somewhat experimental, but the following recipe should work:
 
 ```shell
-conda install ninja meson fmt spdlog cli11 doctest
+# ensure system level tools are installed
+apt-get update && apt-get install libgl1 cmake g++
 
-env CXXFLAGS=-I"$CONDA_PREFIX/include/opencascade" LDFLAGS=-L"$CONDA_PREFIX/lib" \
-  meson setup build -Duse_conan=false
+# create a conda environment and activate it
+conda create -n bluemira python
+conda activate bluemira
+
+# install dependencies
+conda install ninja meson occt fmt spdlog cli11 doctest
+
+# use Conda for most things except for its compiler, which seems to break things
+CXX=/usr/bin/g++ meson setup build -Dconda_prefix=$CONDA_PREFIX -Duse_conan=false
+
+# compile the code
+meson compile -C build
+
+# run tests
+meson test -vC build
+```
+
+Using the GCC C++ compiler installed within Conda causes the OpenGL
+libraries (depended on by OpenCascade) to fail to link, hence using an
+externally installed version.
+
+The `use_conan` parameter controls whether dependencies are fetched
+via Conan, or are assumed to exist within the system. Allowing
+advanced users to install them, and use the following during the setup
+step:
+
+```shell
+meson setup build -Duse_conan=false
 ```
 
 ## Notes
