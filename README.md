@@ -76,14 +76,18 @@ conda activate bluemira
 # install dependencies
 conda install ninja meson occt fmt spdlog cli11 doctest
 
-# use Conda for most things except for its compiler, which seems to break things
-CXX=/usr/bin/g++ meson setup build -Dconda_prefix=$CONDA_PREFIX -Duse_conan=false
+# set up and enter build directly
+CXX=/usr/bin/g++ meson setup build \
+  -Dconda_prefix=$CONDA_PREFIX -Duse_conan=false
+
+cd build
+
 
 # compile the code
-meson compile -C build
+meson compile
 
 # run tests
-meson test -vC build
+meson test -v
 ```
 
 Using the GCC C++ compiler installed within Conda causes the OpenGL
