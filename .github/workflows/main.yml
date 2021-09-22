@@ -20,7 +20,7 @@ jobs:
         conan profile update settings.compiler.libcxx=libstdc++11 default
     - name: Build
       run: |
-        CXXFLAGS=-I/usr/include/opencascade meson setup build
+        meson setup build
         meson compile -C build
     - name: Test
       run: |
