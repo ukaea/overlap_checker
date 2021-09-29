@@ -115,7 +115,7 @@ document::load_brep_file(const char* path)
 	BRep_Builder builder;
 	TopoDS_Shape shape;
 
-	spdlog::info("reading brep file {}", path);
+	spdlog::debug("reading brep file {}", path);
 
 	if (!BRepTools::Read(shape, path, builder)) {
 		spdlog::critical("unable to read BREP file");
@@ -157,7 +157,7 @@ document::write_brep_file(const char* path) const
 		builder.Add(merged, shape);
 	}
 
-	spdlog::info("writing brep file {}", path);
+	spdlog::debug("writing brep file {}", path);
 
 	if (!BRepTools::Write(merged, path)) {
 		spdlog::critical("failed to write brep file");
@@ -166,17 +166,16 @@ document::write_brep_file(const char* path) const
 }
 
 static bool
-is_shape_valid(const TopoDS_Shape& shape)
+is_shape_valid(int i, const TopoDS_Shape& shape)
 {
 	BRepCheck_Analyzer checker{shape};
 	if (checker.IsValid()) {
 		return true;
 	}
 
-	const auto &result = checker.Result(shape);
-
 	std::vector<BRepCheck_Status> errors;
-	for (const auto status : result->StatusOnShape()) {
+
+	for (const auto status : checker.Result(shape)->Status()) {
 		if (status != BRepCheck_NoError) {
 			errors.push_back(status);
 		}
@@ -189,7 +188,7 @@ is_shape_valid(const TopoDS_Shape& shape)
 			continue;
 		}
 
-		for (const auto &status : result->StatusOnShape(component)) {
+		for (const auto status : checker.Result(component)->Status()) {
 			if (status != BRepCheck_NoError) {
 				errors.push_back(status);
 			}
@@ -197,8 +196,8 @@ is_shape_valid(const TopoDS_Shape& shape)
 	}
 
 	spdlog::warn(
-		"shape contains following errors {}",
-		errors);
+		"shape {} contains following errors {}",
+		i, errors);
 
 	return false;
 }
@@ -206,11 +205,14 @@ is_shape_valid(const TopoDS_Shape& shape)
 size_t
 document::count_invalid_shapes() const
 {
+	int i = 0;
 	size_t num_invalid = 0;
 	for (const auto &shape : solid_shapes) {
-		if (!is_shape_valid(shape)) {
+		spdlog::debug("checking shape {}", i);
+		if (!is_shape_valid(i, shape)) {
 			num_invalid += 1;
 		}
+		i++;
 	}
 	return num_invalid;
 }

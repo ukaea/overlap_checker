@@ -263,9 +263,10 @@ main(int argc, char **argv)
 			spdlog::critical("{} shapes were not valid", ninvalid);
 			return 1;
 		}
+		spdlog::info("geometry checks passed");
 	}
 
-	spdlog::info("calculating shape information");
+	spdlog::debug("calculating bounding boxes");
 	std::vector<Bnd_OBB> bounding_boxes;
 	std::vector<double> volumes;
 	bounding_boxes.reserve(doc.solid_shapes.size());
@@ -278,7 +279,7 @@ main(int argc, char **argv)
 		volumes.push_back(volume_of_shape(shape));
 	}
 
-	spdlog::info("starting imprinting");
+	spdlog::debug("starting imprinting");
 
 	worker_queue queue;
 
@@ -302,7 +303,7 @@ main(int argc, char **argv)
 			num_failed = 0,
 			num_intersected = 0;
 
-		spdlog::info("launching {} worker threads", num_parallel_jobs);
+		spdlog::debug("launching {} worker threads", num_parallel_jobs);
 		std::vector<std::thread> threads;
 		for (unsigned i = 0; i < num_parallel_jobs; i++) {
 			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue), std::ref(imprint_tolerances));
@@ -333,14 +334,14 @@ main(int argc, char **argv)
 
 				if (vol_common > max_overlap) {
 					spdlog::error(
-						"{:5}-{:<5} too much overlap ({:.2f}) between shapes ({:.2f}, {:.2f})",
-						hi, lo, vol_common, volumes[hi], volumes[lo]);
+						"{:5}-{:<5} overlap by more than {}%, {:.2f}% of smaller shape",
+						hi, lo, max_common_volume_ratio * 100, vol_common / min_vol * 100);
 					fmt::print("{},{},bad_overlap\n", hi, lo);
 					num_intersected += 1;
 				} else {
 					spdlog::info(
-						"{:5}-{:<5} overlap by an acceptable amount, {:.2f}% of smaller shape",
-						hi, lo, vol_common / min_vol * 100);
+						"{:5}-{:<5} overlap by less than {}%, {:.2f}% of smaller shape",
+						hi, lo, max_common_volume_ratio * 100, vol_common / min_vol * 100);
 					fmt::print("{},{},overlap\n", hi, lo);
 				}
 				break;
