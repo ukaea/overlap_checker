@@ -10,10 +10,6 @@
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Compound.hxx>
 
-#include <BOPAlgo_PaveFiller.hxx>
-#include <BRepAlgoAPI_Section.hxx>
-#include <BRepTools.hxx>
-
 #include "document.hpp"
 #include "utils.hpp"
 

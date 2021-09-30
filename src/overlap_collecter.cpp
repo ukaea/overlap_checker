@@ -10,7 +10,6 @@
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Compound.hxx>
 
-#include <BRepAlgoAPI_Section.hxx>
 #include <BRepTools.hxx>
 
 #include "document.hpp"
@@ -44,14 +43,9 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 
 		spdlog::info("{:5}-{:<5} processing", first, second);
 
-		// using Section just because it exposes PerformNow
-		BRepAlgoAPI_Section op{
-			doc.solid_shapes[first], doc.solid_shapes[second], false};
-		op.SetOperation(BOPAlgo_COMMON);
-		op.SetFuzzyValue(0);
-		op.SetNonDestructive(true);
-		op.SetRunParallel(false);
-
+		boolean_op op{
+			BOPAlgo_COMMON,
+			doc.solid_shapes[first], doc.solid_shapes[second]};
 		op.Build();
 		if(!op.IsDone()) {
 			spdlog::critical("unable determine solid common to shapes");

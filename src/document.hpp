@@ -2,6 +2,8 @@
 
 // from opencascade
 #include <TopoDS_Shape.hxx>
+#include <BRepAlgoAPI_BooleanOperation.hxx>
+class BOPAlgo_PaveFiller;
 
 double volume_of_shape(const class TopoDS_Shape& shape);
 double distance_between_shapes(const TopoDS_Shape& a, const TopoDS_Shape& b);
@@ -20,6 +22,37 @@ struct document {
 	int lookup_solid(const std::string &str) const;
 };
 
+class boolean_op : public BRepAlgoAPI_BooleanOperation
+{
+public:
+	boolean_op(
+		const BOPAlgo_Operation op,
+		const TopoDS_Shape& shape,
+		const TopoDS_Shape& tool) {
+		init(op, shape, tool);
+	}
+
+	boolean_op(
+		const BOPAlgo_PaveFiller& pf,
+		const BOPAlgo_Operation op,
+		const TopoDS_Shape& shape,
+		const TopoDS_Shape& tool) :
+		BRepAlgoAPI_BooleanOperation{pf} {
+		init(op, shape, tool);
+	};
+
+protected:
+	void init(
+		const BOPAlgo_Operation op,
+		const TopoDS_Shape& shape,
+		const TopoDS_Shape& tool)	{
+		myOperation = op;
+		myArguments.Append(shape);
+		myTools.Append(tool);
+		SetRunParallel(false);
+		SetNonDestructive(true);
+	}
+};
 
 // note that these are all subect to fuzzy tolerance
 enum class intersect_status {

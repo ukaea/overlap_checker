@@ -16,9 +16,6 @@
 
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
-#include <BRepAlgoAPI_Section.hxx>
-#include <BRepAlgoAPI_Common.hxx>
-#include <BRepAlgoAPI_Fuse.hxx>
 
 #include <BRepCheck_Analyzer.hxx>
 
@@ -286,16 +283,8 @@ intersect_result classify_solid_intersection(
 		return result;
 	}
 
-	// I'm only using the Section class because it has the most convinient
-	// constructor, the functionality mostly comes from
-	// BRepAlgoAPI_BooleanOperation and BRepAlgoAPI_BuilderAlgo (at the time
-	// of writing anyway!)
-	BRepAlgoAPI_Section op{shape, tool, filler, false};
-	op.SetOperation(BOPAlgo_COMMON);
-	op.SetRunParallel(false);
+	boolean_op op{filler, BOPAlgo_COMMON, shape, tool};
 	op.SetFuzzyValue(filler.FuzzyValue());
-	op.SetNonDestructive(true);
-
 	op.Build();
 	collect_warnings(op.GetReport().get(), result.num_common_warnings);
 	if (op.HasErrors()) {
@@ -473,13 +462,9 @@ imprint_result perform_solid_imprinting(
 	TopoDS_Shape common;
 
 	{
-		BRepAlgoAPI_Section op{shape, tool, filler, false};
-		op.SetRunParallel(false);
+		boolean_op op{filler, BOPAlgo_COMMON, shape, tool};
 		op.SetFuzzyValue(filler.FuzzyValue());
-		op.SetNonDestructive(true);
 		op.SimplifyResult();
-
-		op.SetOperation(BOPAlgo_COMMON);
 		op.Build();
 		collect_warnings(op.GetReport().get(), result.num_common_warnings);
 		if (op.HasErrors()) {
@@ -511,24 +496,16 @@ imprint_result perform_solid_imprinting(
 		// merge the common volume into the larger shape
 		const bool merge_into_shape = result.vol_cut >= result.vol_cut12;
 
-		BRepAlgoAPI_Fuse op;
-		op.SetRunParallel(false);
+		boolean_op op{
+			BOPAlgo_FUSE,
+			merge_into_shape ? result.shape : result.tool,
+			common
+		};
 		op.SimplifyResult();
-
 		// fuzzy stuff has already been done so no need to introduce more error
 		// op.SetFuzzyValue(filler.FuzzyValue());
 		// the above created distinct shapes, so we are free to modify here
-		// op.SetNonDestructive(true);
-
-		{
-			TopTools_ListOfShape args;
-			args.Append(merge_into_shape ? result.shape : result.tool);
-			op.SetArguments(args);
-
-			args.Clear();
-			args.Append(common);
-			op.SetTools(args);
-		}
+		op.SetNonDestructive(false);
 
 		op.Build();
 		collect_warnings(op.GetReport().get(), result.num_fuse_warnings);
