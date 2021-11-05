@@ -117,7 +117,7 @@ export CC=clang CXX=clang++
 
 conan install --build=fmt fmt/8.0.1@
 conan install --build=spdlog spdlog/1.9.2@
-conan install --build=cli11 cli11/2.0.0@
+conan install --build=cli11 cli11/2.1.1@
 conan install --build=doctest doctest/2.4.6@
 ```
 

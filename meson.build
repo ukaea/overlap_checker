@@ -58,7 +58,7 @@ if get_option('use_conan')
   conan_pkgs = {
     'fmt': 'fmt/8.0.1',
     'spdlog': 'spdlog/1.9.2',
-    'CLI11': 'cli11/2.0.0',
+    'CLI11': 'cli11/2.1.1',
     'doctest': 'doctest/2.4.6',
   }
 
