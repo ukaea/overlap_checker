@@ -5,9 +5,10 @@
 #include <CLI/Config.hpp>
 
 #include <BRepTools.hxx>
+#include <BRep_Builder.hxx>
+
 #include <TopExp_Explorer.hxx>
 
-#include "BRep_Builder.hxx"
 #include "document.hpp"
 #include "utils.hpp"
 
