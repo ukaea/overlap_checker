@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <stdexcept>
 
 #ifdef INCLUDE_DOCTESTS
 #include <doctest/doctest.h>
@@ -108,7 +109,11 @@ volume_of_shape(const TopoDS_Shape& shape)
 {
 	GProp_GProps props;
 	BRepGProp::VolumeProperties(shape, props);
-	return props.Mass();
+	const double volume = props.Mass();
+	if (volume < 0) {
+		throw std::runtime_error("volume of shape less than zero");
+	}
+	return volume;
 }
 
 double
