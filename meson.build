@@ -34,7 +34,7 @@ occt_libs = [
   'TKBO', 'TKBRep', 'TKPrim',
   'TKG3d', 'TKLCAF', 'TKMath',
   'TKTopAlgo', 'TKXCAF', 'TKSTEP',
-  'TKXSBase', 'TKXDESTEP',
+  'TKXSBase', 'TKXDESTEP', 'TKShHealing'
 ]
 
 occt_deps = []

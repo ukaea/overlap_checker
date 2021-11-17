@@ -464,7 +464,6 @@ imprint_result perform_solid_imprinting(
 	{
 		boolean_op op{filler, BOPAlgo_COMMON, shape, tool};
 		op.SetFuzzyValue(filler.FuzzyValue());
-		op.SimplifyResult();
 		op.Build();
 		collect_warnings(op.GetReport().get(), result.num_common_warnings);
 		if (op.HasErrors()) {
@@ -501,11 +500,9 @@ imprint_result perform_solid_imprinting(
 			merge_into_shape ? result.shape : result.tool,
 			common
 		};
-		op.SimplifyResult();
 		// fuzzy stuff has already been done so no need to introduce more error
 		// op.SetFuzzyValue(filler.FuzzyValue());
 		// the above created distinct shapes, so we are free to modify here
-		op.SetNonDestructive(false);
 
 		op.Build();
 		collect_warnings(op.GetReport().get(), result.num_fuse_warnings);

@@ -33,6 +33,9 @@
 #include <Quantity_PhysicalQuantity.hxx>
 #include <Quantity_Color.hxx>
 
+#include <ShapeFix_Shape.hxx>
+#include <ShapeFix_Wireframe.hxx>
+
 #include "document.hpp"
 #include "utils.hpp"
 
@@ -228,6 +231,64 @@ public:
 		}
 	}
 
+	void fix_shapes(double precision, double max_tolerance) {
+		for (auto &shape : doc.solid_shapes) {
+			ShapeFix_Shape fixer{shape};
+			fixer.SetPrecision(precision);
+			fixer.SetMaxTolerance(max_tolerance);
+			auto fixed = fixer.Perform();
+			{
+				std::string done;
+				if (fixer.Status(ShapeExtend_DONE1)) done += ", some free edges were fixed";
+				if (fixer.Status(ShapeExtend_DONE2)) done += ", some free wires were fixed";
+				if (fixer.Status(ShapeExtend_DONE3)) done += ", some free faces were fixed";
+				if (fixer.Status(ShapeExtend_DONE4)) done += ", some free shells were fixed";
+				if (fixer.Status(ShapeExtend_DONE5)) done += ", some free solids were fixed";
+				if (fixer.Status(ShapeExtend_DONE6)) done += ", shapes in compound(s) were fixed";
+				spdlog::info("shapefixer={}{}",	fixed, done);
+			}
+			shape = fixer.Shape();
+		}
+	}
+
+	void fix_wireframes(double precision, double max_tolerance) {
+		for (auto &shape : doc.solid_shapes) {
+			ShapeFix_Wireframe fixer{shape};
+			fixer.SetPrecision(precision);
+			fixer.SetMaxTolerance(max_tolerance);
+			fixer.ModeDropSmallEdges() = Standard_True;
+			{
+				auto small_res = fixer.FixSmallEdges();
+				std::string done;
+				if (fixer.StatusSmallEdges(ShapeExtend_OK)) done += "No small edges were found";
+				if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) done += "Some small edges were fixed";
+				if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) done += "Failed to fix some small edges";
+				spdlog::info("smalledge={}, {}", small_res, done);
+			}
+			{
+				auto gap_res = fixer.FixWireGaps();
+				std::string done;
+				if (fixer.StatusSmallEdges(ShapeExtend_OK)) done += "No gaps were found";
+				if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) done += "Some gaps in 3D were fixed";
+				if (fixer.StatusSmallEdges(ShapeExtend_DONE2)) done += "Some gaps in 2D were fixed";
+				if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) done += "Failed to fix some gaps in 3D";
+				if (fixer.StatusSmallEdges(ShapeExtend_FAIL2)) done += "Failed to fix some gaps in 2D";
+				spdlog::info(" wiregaps={}, {}", gap_res, done);
+			}
+			shape = fixer.Shape();
+		}
+	}
+
+	bool check_geometry() {
+		auto ninvalid = doc.count_invalid_shapes();
+		if (ninvalid) {
+			spdlog::critical("{} shapes were not valid", ninvalid);
+			return false;
+		}
+		spdlog::info("geometry checks passed");
+		return true;
+	}
+
 	void write_brep_file(const char *path) {
 		doc.write_brep_file(path);
 	}
@@ -278,6 +339,7 @@ main(int argc, char **argv)
 
 	std::string path_in, path_out;
 	double minimum_volume = 1;
+	bool check_geometry{true}, fix_geometry{false};
 
 	{
 		CLI::App app{"Convert STEP files to BREP format for preprocessor."};
@@ -287,7 +349,18 @@ main(int argc, char **argv)
 		app.add_option("output", path_out, "Path of the output file")
 			->required()
 			->option_text("file.brep");
-		app.add_option("--min-volume,-v", minimum_volume, "Minimum shape volume, in mm^3");
+		app.add_option(
+			"--min-volume,-v",
+			minimum_volume,
+			fmt::format("Minimum shape volume, in mm^3 ({:L})", minimum_volume));
+		app.add_flag(
+			"--check-geometry,!--no-check-geometry",
+			check_geometry,
+			fmt::format("Check overall validity of shapes ({})", check_geometry));
+		app.add_flag(
+			"--fix-geometry,!--no-fix-geometry",
+			fix_geometry,
+			fmt::format("Fix-up wireframes and shapes in geometry ({})", fix_geometry));
 		CLI11_PARSE(app, argc, argv);
 	}
 
@@ -300,6 +373,20 @@ main(int argc, char **argv)
 
 	collector doc(minimum_volume);
 	load_step_file(path_in.c_str(), doc);
+
+	if (check_geometry) {
+		spdlog::debug("checking geometry");
+		if (!doc.check_geometry()) {
+			return 1;
+		}
+	}
+
+	if (fix_geometry) {
+		spdlog::debug("fixing wireframes");
+		doc.fix_wireframes(0.01, 0.00001);
+		spdlog::debug("fixing shapes");
+		doc.fix_shapes(0.01, 0.00001);
+	}
 
 	doc.log_summary();
 
