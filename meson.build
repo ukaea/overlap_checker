@@ -32,9 +32,10 @@ endif
 occt_libs = [
   'TKernel',
   'TKBO', 'TKBRep', 'TKPrim',
-  'TKG3d', 'TKLCAF', 'TKMath',
+  'TKG2d', 'TKG3d', 'TKLCAF', 'TKMath',
   'TKTopAlgo', 'TKXCAF', 'TKSTEP',
-  'TKXSBase', 'TKXDESTEP', 'TKShHealing'
+  'TKXSBase', 'TKXDESTEP', 'TKShHealing',
+  'TKGeomAlgo',
 ]
 
 occt_deps = []
@@ -122,6 +123,15 @@ executable(
 
 executable(
   'imprint_solids', 'src/imprint_solids.cpp',
+  dependencies : shared_deps,
+  install : true,
+)
+
+executable(
+  'merge_solids', [
+    'src/merge_solids.cpp',
+    'src/salome/geom_gluer.cpp',
+  ],
   dependencies : shared_deps,
   install : true,
 )
