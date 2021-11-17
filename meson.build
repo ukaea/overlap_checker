@@ -109,6 +109,12 @@ executable(
 )
 
 executable(
+  'brep_flatten', 'src/brep_flatten.cpp',
+  dependencies : shared_deps,
+  install : true,
+)
+
+executable(
   'overlap_checker', 'src/overlap_checker.cpp',
   dependencies : shared_deps,
   install : true,

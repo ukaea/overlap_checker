@@ -35,6 +35,26 @@
 #include "utils.hpp"
 
 
+template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
+	// parse is inherited from formatter<string_view>.
+	template <typename FormatContext>
+	auto format(TopAbs_ShapeEnum c, FormatContext& ctx) {
+		string_view name = "unknown";
+		switch (c) {
+		case TopAbs_COMPOUND: name = "COMPOUND"; break;
+		case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
+		case TopAbs_SOLID: name = "SOLID"; break;
+		case TopAbs_SHELL: name = "SHELL"; break;
+		case TopAbs_FACE: name = "FACE"; break;
+		case TopAbs_WIRE: name = "WIRE"; break;
+		case TopAbs_EDGE: name = "EDGE"; break;
+		case TopAbs_VERTEX: name = "VERTEX"; break;
+		case TopAbs_SHAPE: name = "SHAPE"; break;
+		}
+		return formatter<string_view>::format(name, ctx);
+	}
+};
+
 template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
 	// parse is inherited from formatter<string_view>.
 	template <typename FormatContext>
@@ -117,12 +137,6 @@ document::load_brep_file(const char* path)
 	if (!BRepTools::Read(shape, path, builder)) {
 		spdlog::critical("unable to read BREP file");
 		std::exit(1);
-	}
-
-	if (shape.ShapeType() != TopAbs_SOLID) {
-		spdlog::debug("file just contains a single solid");
-		solid_shapes.push_back(shape);
-		return;
 	}
 
 	if (shape.ShapeType() != TopAbs_COMPOUND && shape.ShapeType() != TopAbs_COMPSOLID) {
