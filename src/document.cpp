@@ -119,6 +119,12 @@ document::load_brep_file(const char* path)
 		std::exit(1);
 	}
 
+	if (shape.ShapeType() != TopAbs_SOLID) {
+		spdlog::debug("file just contains a single solid");
+		solid_shapes.push_back(shape);
+		return;
+	}
+
 	if (shape.ShapeType() != TopAbs_COMPOUND && shape.ShapeType() != TopAbs_COMPSOLID) {
 		spdlog::critical(
 			"expected to get COMPOUND or COMPSOLID toplevel shape from brep file, not {}",
