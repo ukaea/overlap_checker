@@ -181,7 +181,6 @@ main(int argc, char **argv)
 
 	std::string path_in;
 	unsigned num_parallel_jobs;
-	bool perform_geometry_checks{true};
 	double
 		bbox_clearance = 0.5,
 		max_common_volume_ratio = 0.01;
@@ -200,10 +199,6 @@ main(int argc, char **argv)
 			->option_text("N")
 			->default_val(4)
 			->check(CLI::Range(1, 1024));
-		app.add_flag(
-			"--check-geometry,!--no-check-geometry",
-			perform_geometry_checks,
-			"Check overall validity of shapes");
 		app.add_option(
 			"--bbox-clearance", bbox_clearance,
 			"Bounding-boxes closer than C will be checked for overlaps")
@@ -255,16 +250,6 @@ main(int argc, char **argv)
 
 	document doc;
 	doc.load_brep_file(path_in.c_str());
-
-	if (perform_geometry_checks) {
-		spdlog::debug("checking geometry");
-		auto ninvalid = doc.count_invalid_shapes();
-		if (ninvalid) {
-			spdlog::critical("{} shapes were not valid", ninvalid);
-			return 1;
-		}
-		spdlog::info("geometry checks passed");
-	}
 
 	spdlog::debug("calculating bounding boxes");
 	std::vector<Bnd_OBB> bounding_boxes;
