@@ -24,6 +24,15 @@ Under ArchLinux the above dependencies would be installed via:
 pacman -S cmake python opencascade
 ```
 
+## Git Large File Storage (LFS)
+
+Testing this code involves a number of geometry files that aren't
+suitable for tracking directly in Git. We're using Git LFS instead to
+track these so this must be installed first, if you want to run
+regression tests.  See https://git-lfs.github.com/ for details.
+
+## Compiling
+
 Following this we use Python to fetch our build tools: Meson is used
 for build configuration, calling out to Conan for C++ package
 management, while Ninja is used as a modern replacement for `make`.
