@@ -1,12 +1,8 @@
 #include <cstdlib>
 
-#ifdef INCLUDE_DOCTESTS
-#include <doctest/doctest.h>
+#ifdef INCLUDE_TESTS
+#include <catch2/catch.hpp>
 #endif
-
-#include <fmt/core.h>
-#include <fmt/ranges.h>
-#include <spdlog/spdlog.h>
 
 #include <BOPAlgo_PaveFiller.hxx>
 #include <BOPAlgo_Operation.hxx>
@@ -31,57 +27,75 @@
 #include <Message_Report.hxx>
 #include <Message_Gravity.hxx>
 
+#include <aixlog.hpp>
+
 #include "document.hpp"
 #include "utils.hpp"
 
-
-template <> struct fmt::formatter<BRepCheck_Status>: formatter<string_view> {
-	// parse is inherited from formatter<string_view>.
-	template <typename FormatContext>
-	auto format(BRepCheck_Status c, FormatContext& ctx) {
-		string_view name = "unknown";
-		switch(c) {
-		case BRepCheck_NoError: name = "NoError"; break;
-		case BRepCheck_InvalidPointOnCurve: name = "InvalidPointOnCurve"; break;
-		case BRepCheck_InvalidPointOnCurveOnSurface: name = "InvalidPointOnCurveOnSurface"; break;
-		case BRepCheck_InvalidPointOnSurface: name = "InvalidPointOnSurface"; break;
-		case BRepCheck_No3DCurve: name = "No3DCurve"; break;
-		case BRepCheck_Multiple3DCurve: name = "Multiple3DCurve"; break;
-		case BRepCheck_Invalid3DCurve: name = "Invalid3DCurve"; break;
-		case BRepCheck_NoCurveOnSurface: name = "NoCurveOnSurface"; break;
-		case BRepCheck_InvalidCurveOnSurface: name = "InvalidCurveOnSurface"; break;
-		case BRepCheck_InvalidCurveOnClosedSurface: name = "InvalidCurveOnClosedSurface"; break;
-		case BRepCheck_InvalidSameRangeFlag: name = "InvalidSameRangeFlag"; break;
-		case BRepCheck_InvalidSameParameterFlag: name = "InvalidSameParameterFlag"; break;
-		case BRepCheck_InvalidDegeneratedFlag: name = "InvalidDegeneratedFlag"; break;
-		case BRepCheck_FreeEdge: name = "FreeEdge"; break;
-		case BRepCheck_InvalidMultiConnexity: name = "InvalidMultiConnexity"; break;
-		case BRepCheck_InvalidRange: name = "InvalidRange"; break;
-		case BRepCheck_EmptyWire: name = "EmptyWire"; break;
-		case BRepCheck_RedundantEdge: name = "RedundantEdge"; break;
-		case BRepCheck_SelfIntersectingWire: name = "SelfIntersectingWire"; break;
-		case BRepCheck_NoSurface: name = "NoSurface"; break;
-		case BRepCheck_InvalidWire: name = "InvalidWire"; break;
-		case BRepCheck_RedundantWire: name = "RedundantWire"; break;
-		case BRepCheck_IntersectingWires: name = "IntersectingWires"; break;
-		case BRepCheck_InvalidImbricationOfWires: name = "InvalidImbricationOfWires"; break;
-		case BRepCheck_EmptyShell: name = "EmptyShell"; break;
-		case BRepCheck_RedundantFace: name = "RedundantFace"; break;
-		case BRepCheck_InvalidImbricationOfShells: name = "InvalidImbricationOfShells"; break;
-		case BRepCheck_UnorientableShape: name = "UnorientableShape"; break;
-		case BRepCheck_NotClosed: name = "NotClosed"; break;
-		case BRepCheck_NotConnected: name = "NotConnected"; break;
-		case BRepCheck_SubshapeNotInShape: name = "SubshapeNotInShape"; break;
-		case BRepCheck_BadOrientation: name = "BadOrientation"; break;
-		case BRepCheck_BadOrientationOfSubshape: name = "BadOrientationOfSubshape"; break;
-		case BRepCheck_InvalidPolygonOnTriangulation: name = "InvalidPolygonOnTriangulation"; break;
-		case BRepCheck_InvalidToleranceValue: name = "InvalidToleranceValue"; break;
-		case BRepCheck_EnclosedRegion: name = "EnclosedRegion"; break;
-		case BRepCheck_CheckFail: name = "CheckFail"; break;
-		}
-		return formatter<string_view>::format(name, ctx);
+std::ostream&
+operator<<(std::ostream& str, TopAbs_ShapeEnum type)
+{
+	const char* name = "unknown";
+	switch(type) {
+	case TopAbs_COMPOUND: name = "COMPOUND"; break;
+	case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
+	case TopAbs_SOLID: name = "SOLID"; break;
+	case TopAbs_SHELL: name = "SHELL"; break;
+	case TopAbs_FACE: name = "FACE"; break;
+	case TopAbs_WIRE: name = "WIRE"; break;
+	case TopAbs_EDGE: name = "EDGE"; break;
+	case TopAbs_VERTEX: name = "VERTEX"; break;
+	case TopAbs_SHAPE: name = "SHAPE"; break;
 	}
-};
+	return str << name;
+}
+
+std::ostream&
+operator<<(std::ostream& str, BRepCheck_Status status)
+{
+	const char* name = "unknown";
+	switch(status)
+	{
+	case BRepCheck_NoError: name = "NoError"; break;
+	case BRepCheck_InvalidPointOnCurve: name = "InvalidPointOnCurve"; break;
+	case BRepCheck_InvalidPointOnCurveOnSurface: name = "InvalidPointOnCurveOnSurface"; break;
+	case BRepCheck_InvalidPointOnSurface: name = "InvalidPointOnSurface"; break;
+	case BRepCheck_No3DCurve: name = "No3DCurve"; break;
+	case BRepCheck_Multiple3DCurve: name = "Multiple3DCurve"; break;
+	case BRepCheck_Invalid3DCurve: name = "Invalid3DCurve"; break;
+	case BRepCheck_NoCurveOnSurface: name = "NoCurveOnSurface"; break;
+	case BRepCheck_InvalidCurveOnSurface: name = "InvalidCurveOnSurface"; break;
+	case BRepCheck_InvalidCurveOnClosedSurface: name = "InvalidCurveOnClosedSurface"; break;
+	case BRepCheck_InvalidSameRangeFlag: name = "InvalidSameRangeFlag"; break;
+	case BRepCheck_InvalidSameParameterFlag: name = "InvalidSameParameterFlag"; break;
+	case BRepCheck_InvalidDegeneratedFlag: name = "InvalidDegeneratedFlag"; break;
+	case BRepCheck_FreeEdge: name = "FreeEdge"; break;
+	case BRepCheck_InvalidMultiConnexity: name = "InvalidMultiConnexity"; break;
+	case BRepCheck_InvalidRange: name = "InvalidRange"; break;
+	case BRepCheck_EmptyWire: name = "EmptyWire"; break;
+	case BRepCheck_RedundantEdge: name = "RedundantEdge"; break;
+	case BRepCheck_SelfIntersectingWire: name = "SelfIntersectingWire"; break;
+	case BRepCheck_NoSurface: name = "NoSurface"; break;
+	case BRepCheck_InvalidWire: name = "InvalidWire"; break;
+	case BRepCheck_RedundantWire: name = "RedundantWire"; break;
+	case BRepCheck_IntersectingWires: name = "IntersectingWires"; break;
+	case BRepCheck_InvalidImbricationOfWires: name = "InvalidImbricationOfWires"; break;
+	case BRepCheck_EmptyShell: name = "EmptyShell"; break;
+	case BRepCheck_RedundantFace: name = "RedundantFace"; break;
+	case BRepCheck_InvalidImbricationOfShells: name = "InvalidImbricationOfShells"; break;
+	case BRepCheck_UnorientableShape: name = "UnorientableShape"; break;
+	case BRepCheck_NotClosed: name = "NotClosed"; break;
+	case BRepCheck_NotConnected: name = "NotConnected"; break;
+	case BRepCheck_SubshapeNotInShape: name = "SubshapeNotInShape"; break;
+	case BRepCheck_BadOrientation: name = "BadOrientation"; break;
+	case BRepCheck_BadOrientationOfSubshape: name = "BadOrientationOfSubshape"; break;
+	case BRepCheck_InvalidPolygonOnTriangulation: name = "InvalidPolygonOnTriangulation"; break;
+	case BRepCheck_InvalidToleranceValue: name = "InvalidToleranceValue"; break;
+	case BRepCheck_EnclosedRegion: name = "EnclosedRegion"; break;
+	case BRepCheck_CheckFail: name = "CheckFail"; break;
+	}
+	return str << name;
+}
 
 double
 volume_of_shape(const TopoDS_Shape& shape)
@@ -100,7 +114,7 @@ distance_between_shapes(const TopoDS_Shape& a, const TopoDS_Shape& b)
 		return dss.Value();
 	}
 
-	spdlog::critical("BRepExtrema_DistShapeShape::Perform() failed");
+	LOG(FATAL) << "BRepExtrema_DistShapeShape::Perform() failed\n";
 	dss.Dump(std::cerr);
 
 	std::abort();
@@ -112,29 +126,31 @@ document::load_brep_file(const char* path)
 	BRep_Builder builder;
 	TopoDS_Shape shape;
 
-	spdlog::debug("reading brep file {}", path);
+	LOG(DEBUG) << "reading brep file " << path << '\n';
 
 	if (!BRepTools::Read(shape, path, builder)) {
-		spdlog::critical("unable to read BREP file");
+		LOG(FATAL) << "unable to read BREP file\n";
 		std::exit(1);
 	}
 
 	if (shape.ShapeType() != TopAbs_COMPOUND && shape.ShapeType() != TopAbs_COMPSOLID) {
-		spdlog::critical(
-			"expected to get COMPOUND or COMPSOLID toplevel shape from brep file, not {}",
-			shape.ShapeType());
+		LOG(FATAL)
+			<< "expected to get COMPOUND or COMPSOLID toplevel shape from brep file, not "
+			<< shape.ShapeType()
+			<< '\n';
 		std::exit(1);
 	}
 
-	spdlog::debug("expecting {} solid shapes", shape.NbChildren());
+	LOG(DEBUG) << "expecting " << shape.NbChildren() << " solid shapes";
 	solid_shapes.reserve(shape.NbChildren());
 
 	for (TopoDS_Iterator it(shape); it.More(); it.Next()) {
 		const auto &shp = it.Value();
 		if (shp.ShapeType() != TopAbs_COMPSOLID && shp.ShapeType() != TopAbs_SOLID) {
-			spdlog::critical(
-				"expecting shape to be a COMPSOLID or SOLID, not {}",
-				shp.ShapeType());
+			LOG(FATAL)
+				<< "expecting shape to be a COMPSOLID or SOLID, not "
+				<< shp.ShapeType()
+				<< '\n';
 			std::exit(1);
 		}
 
@@ -145,7 +161,7 @@ document::load_brep_file(const char* path)
 void
 document::write_brep_file(const char* path) const
 {
-	spdlog::debug("merging {} shapes for writing", solid_shapes.size());
+	LOG(DEBUG) << "merging " << solid_shapes.size() << " shapes for writing\n";
 
 	TopoDS_Compound merged;
 	TopoDS_Builder builder;
@@ -154,10 +170,10 @@ document::write_brep_file(const char* path) const
 		builder.Add(merged, shape);
 	}
 
-	spdlog::debug("writing brep file {}", path);
+	LOG(DEBUG) << "writing brep file " << path << '\n';
 
 	if (!BRepTools::Write(merged, path)) {
-		spdlog::critical("failed to write brep file");
+		LOG(FATAL) << "failed to write brep file\n";
 		std::exit(1);
 	}
 }
@@ -170,11 +186,13 @@ is_shape_valid(int i, const TopoDS_Shape& shape)
 		return true;
 	}
 
-	std::vector<BRepCheck_Status> errors;
+	LOG(WARNING)
+		<< "shape " << i
+		<< " contains following errors ";
 
 	for (const auto status : checker.Result(shape)->Status()) {
 		if (status != BRepCheck_NoError) {
-			errors.push_back(status);
+			LOG(WARNING) << status;
 		}
 	}
 
@@ -187,14 +205,12 @@ is_shape_valid(int i, const TopoDS_Shape& shape)
 
 		for (const auto status : checker.Result(component)->Status()) {
 			if (status != BRepCheck_NoError) {
-				errors.push_back(status);
+				LOG(WARNING) << status;
 			}
 		}
 	}
 
-	spdlog::warn(
-		"shape {} contains following errors {}",
-		i, errors);
+	LOG(WARNING) << '\n';
 
 	return false;
 }
@@ -205,7 +221,7 @@ document::count_invalid_shapes() const
 	int i = 0;
 	size_t num_invalid = 0;
 	for (const auto &shape : solid_shapes) {
-		spdlog::debug("checking shape {}", i);
+		LOG(DEBUG) << "checking shape" << i << '\n';
 		if (!is_shape_valid(i, shape)) {
 			num_invalid += 1;
 		}
@@ -325,7 +341,7 @@ intersect_result classify_solid_intersection(
 	return result;
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
+#ifdef INCLUDE_TESTS
 #include <BRepPrimAPI_MakeBox.hxx>
 
 static inline TopoDS_Shape
@@ -522,7 +538,7 @@ imprint_result perform_solid_imprinting(
 	return result;
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
+#ifdef INCLUDE_TESTS
 #include <BRepPrimAPI_MakeBox.hxx>
 
 TEST_SUITE("perform_solid_imprinting") {

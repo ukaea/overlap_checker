@@ -1,13 +1,9 @@
 #include <array>
 #include <cstdlib>
+#include <cassert>
+#include <iomanip>
+#include <sstream>
 #include <string>
-
-#include <fmt/core.h>
-#include <spdlog/spdlog.h>
-
-#include <CLI/App.hpp>
-#include <CLI/Formatter.hpp>
-#include <CLI/Config.hpp>
 
 #include <STEPCAFControl_Reader.hxx>
 #include <XCAFApp_Application.hxx>
@@ -36,46 +32,29 @@
 #include <ShapeFix_Shape.hxx>
 #include <ShapeFix_Wireframe.hxx>
 
+#include <cxx_argp_parser.h>
+#include <aixlog.hpp>
+
 #include "document.hpp"
 #include "utils.hpp"
-
-template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
-	// parse is inherited from formatter<string_view>.
-	template <typename FormatContext>
-	auto format(TopAbs_ShapeEnum c, FormatContext& ctx) {
-		string_view name = "unknown";
-		switch (c) {
-		case TopAbs_COMPOUND: name = "COMPOUND"; break;
-		case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
-		case TopAbs_SOLID: name = "SOLID"; break;
-		case TopAbs_SHELL: name = "SHELL"; break;
-		case TopAbs_FACE: name = "FACE"; break;
-		case TopAbs_WIRE: name = "WIRE"; break;
-		case TopAbs_EDGE: name = "EDGE"; break;
-		case TopAbs_VERTEX: name = "VERTEX"; break;
-		case TopAbs_SHAPE: name = "SHAPE"; break;
-		}
-		return formatter<string_view>::format(name, ctx);
-	}
-};
 
 static void
 assign_cstring(std::string &dst, const TCollection_ExtendedString &src) {
 	dst.resize(src.LengthOfCString());
-	char * str = dst.data();
+	auto str = (char *)dst.data();
 	size_t len = src.ToUTF8CString(str);
 
 	if (len > dst.length()) {
-		spdlog::critical(
-			("potential memory corruption from utf8 string overflow. "
-			 "expected={} bytes got={}"),
-			dst.length(), len);
+		LOG(FATAL)
+			<< "potential memory corruption from utf8 string overflow. "
+			<< "expected=" << dst.length() << "bytes "
+			<< "got=" << len << '\n';
 		std::abort();
 	} else if (len < dst.length()) {
-		spdlog::warn(
-			("utf8 string not the specified length"
-			 "expected={} bytes got={}"),
-			dst.length(), len);
+		LOG(WARNING)
+			<< "utf8 string not the specified length"
+			<< "expected=" << dst.length() << " bytes "
+			<< "got=" << len << '\n';
 		dst.resize(len);
 	}
 }
@@ -105,7 +84,7 @@ get_label_name(const TDF_Label &label, std::string &name)
 
 static bool
 get_color_info(const TDF_Label &label, std::string &hexcode) {
-	static const std::array types = {
+	static const std::array<XCAFDoc_ColorType, 3> types = {
 		XCAFDoc_ColorGen,
 		XCAFDoc_ColorSurf,
 		XCAFDoc_ColorCurv,
@@ -166,7 +145,7 @@ class collector {
 
 		TopoDS_Shape shape;
 		if (!XCAFDoc_ShapeTool::GetShape(label, shape)) {
-			spdlog::error("unable to get shape {}", label_name);
+			LOG(ERROR) << "unable to get shape " << label_name << '\n';
 			std::abort();
 		}
 
@@ -176,23 +155,29 @@ class collector {
 			if (volume < minimum_volume) {
 				if (volume < 0) {
 					n_negative_volume += 1;
-					spdlog::info(
-						"ignoring part of shape '{}' due to negative volume, {}",
-						label_name, volume);
+					LOG(INFO)
+						<< "ignoring part of shape '" << label_name << "' "
+						<< "due to negative volume, " << volume << '\n';
 				} else {
 					n_small += 1;
-					spdlog::info(
-						"ignoring part of shape '{}' because it's too small, {} < {}",
-						label_name, volume, minimum_volume);
+					LOG(INFO)
+						<< "ignoring part of shape '" << label_name << "' "
+						<< "because it's too small, " << volume
+						<< " < " << minimum_volume << '\n';
 				}
 				continue;
 			}
 
 			doc.solid_shapes.emplace_back(ex.Current());
 
-			fmt::print(
-				"{},{},{:.1f},{},{},{}\n",
-				label_num, label_name, volume, color, material_name, material_density);
+			const auto ss = std::cout.precision();
+			std::cout
+				<< label_num << ','
+				<< label_name << ','
+				<< std::setprecision(1) << volume << std::setprecision(ss) << ','
+				<< color << ','
+				<< material_name << ','
+				<< material_density << '\n';
 		}
 	}
 
@@ -220,14 +205,16 @@ public:
 	}
 
 	void log_summary() {
-		spdlog::info(
-			"enumerated {} labels, resulting in {} solids",
-			label_num, doc.solid_shapes.size());
+		LOG(INFO)
+			<< "enumerated " << label_num << " labels, "
+			<< "resulting in " << doc.solid_shapes.size() << " solids\n";
 		if (n_small > 0) {
-			spdlog::warn("{} solids were excluded because they were too small", n_small);
+			LOG(WARNING)
+				<< n_small << " solids were excluded because they were too small\n";
 		}
 		if (n_negative_volume > 0) {
-			spdlog::warn("{} solids were excluded because they had negative volume", n_negative_volume);
+			LOG(WARNING)
+				<< n_negative_volume << " solids were excluded because they had negative volume\n";
 		}
 	}
 
@@ -237,16 +224,14 @@ public:
 			fixer.SetPrecision(precision);
 			fixer.SetMaxTolerance(max_tolerance);
 			auto fixed = fixer.Perform();
-			{
-				std::string done;
-				if (fixer.Status(ShapeExtend_DONE1)) done += ", some free edges were fixed";
-				if (fixer.Status(ShapeExtend_DONE2)) done += ", some free wires were fixed";
-				if (fixer.Status(ShapeExtend_DONE3)) done += ", some free faces were fixed";
-				if (fixer.Status(ShapeExtend_DONE4)) done += ", some free shells were fixed";
-				if (fixer.Status(ShapeExtend_DONE5)) done += ", some free solids were fixed";
-				if (fixer.Status(ShapeExtend_DONE6)) done += ", shapes in compound(s) were fixed";
-				spdlog::info("shapefixer={}{}",	fixed, done);
-			}
+			LOG(INFO) << "shapefixer=" << fixed;
+			if (fixer.Status(ShapeExtend_DONE1)) LOG(INFO) << ", some free edges were fixed";
+			if (fixer.Status(ShapeExtend_DONE2)) LOG(INFO) << ", some free wires were fixed";
+			if (fixer.Status(ShapeExtend_DONE3)) LOG(INFO) << ", some free faces were fixed";
+			if (fixer.Status(ShapeExtend_DONE4)) LOG(INFO) << ", some free shells were fixed";
+			if (fixer.Status(ShapeExtend_DONE5)) LOG(INFO) << ", some free solids were fixed";
+			if (fixer.Status(ShapeExtend_DONE6)) LOG(INFO) << ", shapes in compound(s) were fixed";
+			LOG(INFO) << '\n';
 			shape = fixer.Shape();
 		}
 	}
@@ -257,35 +242,33 @@ public:
 			fixer.SetPrecision(precision);
 			fixer.SetMaxTolerance(max_tolerance);
 			fixer.ModeDropSmallEdges() = Standard_True;
-			{
-				auto small_res = fixer.FixSmallEdges();
-				std::string done;
-				if (fixer.StatusSmallEdges(ShapeExtend_OK)) done += "No small edges were found";
-				if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) done += "Some small edges were fixed";
-				if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) done += "Failed to fix some small edges";
-				spdlog::info("smalledge={}, {}", small_res, done);
-			}
-			{
-				auto gap_res = fixer.FixWireGaps();
-				std::string done;
-				if (fixer.StatusSmallEdges(ShapeExtend_OK)) done += "No gaps were found";
-				if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) done += "Some gaps in 3D were fixed";
-				if (fixer.StatusSmallEdges(ShapeExtend_DONE2)) done += "Some gaps in 2D were fixed";
-				if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) done += "Failed to fix some gaps in 3D";
-				if (fixer.StatusSmallEdges(ShapeExtend_FAIL2)) done += "Failed to fix some gaps in 2D";
-				spdlog::info(" wiregaps={}, {}", gap_res, done);
-			}
+			auto small_res = fixer.FixSmallEdges();
+			auto gap_res = fixer.FixWireGaps();
 			shape = fixer.Shape();
+
+			LOG(INFO) << "smalledge=" << small_res;
+			if (fixer.StatusSmallEdges(ShapeExtend_OK)) LOG(INFO) << "No small edges were found";
+			if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) LOG(INFO) << "Some small edges were fixed";
+			if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) LOG(INFO) << "Failed to fix some small edges";
+			LOG(INFO) << '\n';
+
+			LOG(INFO) << " wiregaps=" << gap_res;
+			if (fixer.StatusWireGaps(ShapeExtend_OK)) LOG(INFO) << "No gaps were found";
+			if (fixer.StatusWireGaps(ShapeExtend_DONE1)) LOG(INFO) << "Some gaps in 3D were fixed";
+			if (fixer.StatusWireGaps(ShapeExtend_DONE2)) LOG(INFO) << "Some gaps in 2D were fixed";
+			if (fixer.StatusWireGaps(ShapeExtend_FAIL1)) LOG(INFO) << "Failed to fix some gaps in 3D";
+			if (fixer.StatusWireGaps(ShapeExtend_FAIL2)) LOG(INFO) << "Failed to fix some gaps in 2D";
+			LOG(INFO) << '\n';
 		}
 	}
 
 	bool check_geometry() {
 		auto ninvalid = doc.count_invalid_shapes();
 		if (ninvalid) {
-			spdlog::critical("{} shapes were not valid", ninvalid);
+			LOG(FATAL) << ninvalid << " shapes were not valid\n";
 			return false;
 		}
-		spdlog::info("geometry checks passed");
+		LOG(INFO) << "geometry checks passed\n";
 		return true;
 	}
 
@@ -294,7 +277,7 @@ public:
 	}
 };
 
-static void
+static bool
 load_step_file(const char* path, collector &col) {
 	auto app = XCAFApp_Application::GetApplication();
 
@@ -303,88 +286,114 @@ load_step_file(const char* path, collector &col) {
 	reader.SetColorMode(true);
 	reader.SetMatMode(true);
 
-	spdlog::info("reading step file {}", path);
+	LOG(INFO) << "reading step file " << path << '\n';
 
 	if (reader.ReadFile(path) != IFSelect_RetDone) {
-		spdlog::critical("unable to ReadFile() on file");
-		std::abort();
+		LOG(FATAL) << "unable to read STEP file " << path << '\n';
+		return false;
 	}
 
-	spdlog::debug("transferring into doc");
+	LOG(DEBUG) << "transferring into doc";
 
 	Handle(TDocStd_Document) doc;
 	app->NewDocument("MDTV-XCAF", doc);
 	if (!reader.Transfer(doc)) {
-		spdlog::critical("failed to Transfer into document");
+		LOG(FATAL) << "failed to Transfer into document";
 		std::abort();
 	}
 
-	spdlog::debug("getting toplevel shapes");
+	LOG(DEBUG) << "getting toplevel shapes\n";
 
 	TDF_LabelSequence toplevel;
 	auto shapetool = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
 
 	shapetool->GetFreeShapes(toplevel);
 
-	spdlog::debug("loading {} toplevel shape(s)", toplevel.Length());
+	LOG(DEBUG)
+		<< "loading " << toplevel.Length() << " toplevel shape(s)\n";
 	for (const auto &label : toplevel) {
 		col.add_label(*shapetool, label);
 	}
+
+	return true;
 }
 
 int
 main(int argc, char **argv)
 {
-	configure_spdlog();
+	configure_aixlog();
 
 	std::string path_in, path_out;
 	double minimum_volume = 1;
 	bool check_geometry{true}, fix_geometry{false};
 
 	{
-		CLI::App app{"Convert STEP files to BREP format for preprocessor."};
-		app.add_option("input", path_in, "Path of the input file")
-			->required()
-			->option_text("file.step");
-		app.add_option("output", path_out, "Path of the output file")
-			->required()
-			->option_text("file.brep");
-		app.add_option(
-			"--min-volume,-v",
-			minimum_volume,
-			fmt::format("Minimum shape volume, in mm^3 ({:L})", minimum_volume));
-		app.add_flag(
-			"--check-geometry,!--no-check-geometry",
-			check_geometry,
-			fmt::format("Check overall validity of shapes ({})", check_geometry));
-		app.add_flag(
-			"--fix-geometry,!--no-fix-geometry",
-			fix_geometry,
-			fmt::format("Fix-up wireframes and shapes in geometry ({})", fix_geometry));
-		CLI11_PARSE(app, argc, argv);
+		const char *doc = "Convert STEP files to BREP format for preprocessor.";
+		const char *usage = "input.step output.brep";
+
+		std::stringstream stream;
+
+		stream << "Minimum shape volume (" << minimum_volume << " mm^3)";
+		auto min_volume_help = stream.str();
+
+		stream = {};
+		stream << "Check overall validity of shapes (" << (check_geometry ? "yes" : "no") << ")";
+		auto check_geometry_help = stream.str();
+
+		stream = {};
+		stream << "Fix-up wireframes and shapes in geometry (" << (fix_geometry ? "yes" : "no") << ")";
+		auto fix_geometry_help = stream.str();
+
+		cxx_argp::parser argp(2);
+		argp.add_option(
+			{"min-volume", 'v', "volume", 0, min_volume_help.c_str()},
+			minimum_volume);
+		argp.add_option(
+			{"check-geometry", 1024, nullptr, 0, check_geometry_help.c_str()},
+			check_geometry);
+		argp.add_option(
+			{"no-check-geometry", 1025, nullptr, OPTION_ALIAS},
+			[&check_geometry](const char *) { check_geometry = false; return true; });
+		argp.add_option(
+			{"fix-geometry", 1026, nullptr, 0, fix_geometry_help.c_str()},
+			fix_geometry);
+		argp.add_option(
+			{"no-fix-geometry", 1027, nullptr, OPTION_ALIAS},
+			[&fix_geometry](const char *) { fix_geometry = false; return true; });
+
+		if (!argp.parse(argc, argv, usage, doc)) {
+			return 1;
+		}
+
+		const auto &args = argp.arguments();
+		assert(args.size() == 2);
+		path_in = args[0];
+		path_out = args[1];
 	}
 
 	if (minimum_volume < 0) {
-		spdlog::critical(
-			"minimum shape volume ({}) should not be negative",
-			minimum_volume);
+		LOG(FATAL)
+			<< "minimum shape volume "
+			<< '(' << minimum_volume << ") should not be negative\n";
 		return 1;
 	}
 
 	collector doc(minimum_volume);
-	load_step_file(path_in.c_str(), doc);
+	if (!load_step_file(path_in.c_str(), doc)) {
+		return 1;
+	}
 
 	if (check_geometry) {
-		spdlog::debug("checking geometry");
+		LOG(DEBUG) << "checking geometry\n";
 		if (!doc.check_geometry()) {
 			return 1;
 		}
 	}
 
 	if (fix_geometry) {
-		spdlog::debug("fixing wireframes");
+		LOG(DEBUG) << "fixing wireframes\n";
 		doc.fix_wireframes(0.01, 0.00001);
-		spdlog::debug("fixing shapes");
+		LOG(DEBUG) << "fixing shapes\n";
 		doc.fix_shapes(0.01, 0.00001);
 	}
 
@@ -392,7 +401,7 @@ main(int argc, char **argv)
 
 	doc.write_brep_file(path_out.c_str());
 
-	spdlog::debug("done");
+	LOG(DEBUG) << "done\n";
 
 	return 0;
 }

@@ -1,61 +1,39 @@
-#include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <cassert>
+
+#include <algorithm>
+#include <iomanip>
+#include <limits>
 #include <string>
 
-#ifdef INCLUDE_DOCTESTS
-#include <doctest/doctest.h>
+#ifdef INCLUDE_TESTS
+#include <catch2/catch.hpp>
 #endif
 
-#include <spdlog/spdlog.h>
-#include <spdlog/cfg/env.h>
-#include <spdlog/stopwatch.h>
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-
+#include <aixlog.hpp>
 
 #include "utils.hpp"
 
-
-
-// code to allow spdlog to print out elapsed time since process started
-class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
+void configure_aixlog()
 {
-	using clock = std::chrono::steady_clock;
-	using timepoint = std::chrono::time_point<clock>;
+	using timepoint = AixLog::Timestamp::time_point_sys_clock;
 
-	timepoint reference;
+	timepoint reference = timepoint::clock::now();
 
-public:
-	time_elapsed_formatter_flag() : reference{clock::now()} {}
-	time_elapsed_formatter_flag(timepoint ref) : reference{ref} {}
+	auto callback = [reference](const AixLog::Metadata& metadata, const std::string& message) {
+		if (metadata.timestamp) {
+			auto elapsed = std::chrono::duration<double>(metadata.timestamp.time_point - reference);
+			std::cout << std::fixed << std::setprecision(3) << elapsed.count();
+		}
+		std::cout << " [" << AixLog::to_string(metadata.severity) << "] ";
+		if (metadata.tag) {
+			std::cout << '(' << metadata.tag.text << ") ";
+		}
+		std::cout << message << '\n';
+	};
 
-	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override {
-		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
-		auto txt = fmt::format("{:.3f}", elapsed.count());
-		dest.append(txt.data(), txt.data() + txt.size());
-	}
-
-	std::unique_ptr<custom_flag_formatter> clone() const override {
-		return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
-	}
-};
-
-void configure_spdlog()
-{
-	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
-	spdlog::cfg::load_env_levels();
-
-	auto formatter = std::make_unique<spdlog::pattern_formatter>();
-	formatter->add_flag<time_elapsed_formatter_flag>('*');
-	formatter->set_pattern("[%*] [%^%l%$] %v");
-	spdlog::set_formatter(std::move(formatter));
-
-	// Replace the default logger with a (color, single-threaded) stderr
-	// logger with name "" (but first replace it with an arbitrarily-named
-	// logger to prevent a name clash)
-	spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
-	spdlog::set_default_logger(spdlog::stderr_color_mt(""));
+	AixLog::Log::init<AixLog::SinkCallback>(AixLog::Severity::trace, callback);
 }
 
 
@@ -75,7 +53,7 @@ are_vals_close(const double a, const double b, const double drel, const double d
 	return std::abs(b - a) < (drel * mag + dabs);
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
+#ifdef INCLUDE_TESTS
 TEST_SUITE("are_vals_close") {
 	TEST_CASE("identical values") {
 		CHECK(are_vals_close(0, 0));
@@ -131,7 +109,7 @@ bool size_t_of_string(const char *s, size_t &i, int base)
 	return true;
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
+#ifdef INCLUDE_TESTS
 TEST_SUITE("int_of_string") {
 	TEST_CASE("success") {
 		int val = -1;

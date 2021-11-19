@@ -1,16 +1,14 @@
+#include <cassert>
 #include <string>
 #include <utility>
-
-#include <spdlog/spdlog.h>
-
-#include <CLI/App.hpp>
-#include <CLI/Formatter.hpp>
-#include <CLI/Config.hpp>
 
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Compound.hxx>
 
 #include <BRepTools.hxx>
+
+#include <cxx_argp_parser.h>
+#include <aixlog.hpp>
 
 #include "document.hpp"
 #include "utils.hpp"
@@ -25,30 +23,32 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 	std::vector<std::string> fields;
 	while ((status = parse_next_row(std::cin, fields)) == input_status::success) {
 		if (fields.size() < 2) {
-			spdlog::critical("CSV input does not contain two fields");
+			LOG(FATAL) << "CSV input does not contain two fields\n";
 			return 1;
 		}
 
 		int first, second;
-
 		if ((first = doc.lookup_solid(fields[0])) < 0) {
-			spdlog::critical("first value ({}) is not a valid shape index", fields[0]);
+			LOG(FATAL) << "first value (" << fields[0] << ") is not a valid shape index\n";
 			return 1;
 		}
 
 		if ((second = doc.lookup_solid(fields[1])) < 0) {
-			spdlog::critical("second value ({}) is not a valid shape index", fields[1]);
+			LOG(FATAL) << "second value (" << fields[1] << ") is not a valid shape index\n";
 			return 1;
 		}
 
-		spdlog::info("{:5}-{:<5} processing", first, second);
+		std::stringstream hi_lo;
+		hi_lo << std::setw(5) << first << '-' << std::left << second << std::right;
+
+		LOG(INFO) << hi_lo.str() << " processing\n";
 
 		boolean_op op{
 			BOPAlgo_COMMON,
 			doc.solid_shapes[first], doc.solid_shapes[second]};
 		op.Build();
 		if(!op.IsDone()) {
-			spdlog::critical("unable determine solid common to shapes");
+			LOG(FATAL) << "unable determine solid common to shapes\n";
 			return 1;
 		}
 
@@ -58,7 +58,7 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 	if (status == input_status::end_of_file) {
 		return 0;
 	} else {
-		spdlog::critical("failed to read line");
+		LOG(FATAL) << "failed to read line\n";
 		return 1;
 	}
 }
@@ -66,19 +66,23 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 int
 main(int argc, char **argv)
 {
-	configure_spdlog();
+	configure_aixlog();
 
 	std::string path_in, path_out;
 
 	{
-		CLI::App app{"Collect overlapping areas of solids and write to BREP file."};
-		app.add_option("input", path_in, "Path of the input file")
-			->required()
-			->option_text("input.brep");
-		app.add_option("output", path_out, "Path of the output file")
-			->required()
-			->option_text("output.brep");
-		CLI11_PARSE(app, argc, argv);
+		const char *doc = "Collect overlapping areas of solids and write to BREP file.";
+		const char *usage = "input.brep output.brep";
+
+		cxx_argp::parser argp(2);
+		if (!argp.parse(argc, argv, usage, doc)) {
+			return 1;
+		}
+
+		const auto &args = argp.arguments();
+		assert(args.size() == 2);
+		path_in = args[0];
+		path_out = args[1];
 	}
 
 	document doc;
@@ -90,9 +94,9 @@ main(int argc, char **argv)
 		return status;
 	}
 
-	spdlog::info("writing brep file {}", path_out);
+	LOG(DEBUG) << "writing brep file " << path_out << '\n';
 	if (!BRepTools::Write(merged, path_out.c_str())) {
-		spdlog::critical("failed to write brep file");
+		LOG(FATAL) << "failed to write brep file\n";
 		return 1;
 	}
 

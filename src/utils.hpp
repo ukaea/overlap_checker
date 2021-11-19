@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-void configure_spdlog();
+void configure_aixlog();
 
 bool int_of_string (const char *s, int &i, int base=0);
 bool size_t_of_string (const char *s, size_t &i, int base=0);

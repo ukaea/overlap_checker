@@ -12,7 +12,7 @@ Python.
 Under Debian/Ubuntu these can be installed by running:
 
 ```shell
-apt-get install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
+apt-get install cmake catch2
 ```
 
 Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
@@ -21,42 +21,21 @@ Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
 Under ArchLinux the above dependencies would be installed via:
 
 ```shell
-pacman -S cmake python opencascade
+pacman -S cmake catch2 opencascade
 ```
 
-Following this we use Python to fetch our build tools: Meson is used
-for build configuration, calling out to Conan for C++ package
-management, while Ninja is used as a modern replacement for `make`.
-I'd suggest doing the above in a [virtual environment][pyvenv] to keep
-them tidy.
-
-
-```shell
-# install build tools, maybe in a seperate venv
-pip install -U conan meson ninja
-```
-
-Finally, we can set up a build directory, compile the code, and run
-the unit tests via:
+Next we set up a build directory, compile the code, and run the unit
+tests via:
 
 ```shell
 # set up and enter a build directory
-meson setup build
-cd build
+cmake build . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=true
 
 # compile the code
-meson compile
+cmake --build build
 
 # run tests
 meson test -v
-```
-
-When developing, it's often more convenient to recompile specific
-targets by running `ninja` directly, similar to `make`. For example,
-to recompile changes to the `overlap_checker` command you could run:
-
-```shell
-ninja overlap_checker
 ```
 
 ## *Experimental* Conda integration for Blueprint
@@ -107,18 +86,11 @@ meson setup build -Duse_conan=false
 
  * Some editors use `clangd` to provide autocompletions and other
    helpful tools, using the Clang compiler can help with this.
- * Prebuilt Conan binaries are only available for some systems, so you
-   might need to explicitly build them.
 
-These can be accomplished with:
+I need to use the following to accomplish this:
 
 ```shell
 export CC=clang CXX=clang++
-
-conan install --build=fmt fmt/8.0.1@
-conan install --build=spdlog spdlog/1.9.2@
-conan install --build=cli11 cli11/2.1.1@
-conan install --build=doctest doctest/2.4.6@
 ```
 
 # Running
