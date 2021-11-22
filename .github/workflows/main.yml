@@ -10,18 +10,11 @@ jobs:
     - name: Install system packages
       run: |
         apt-get -y update
-        apt-get -y install cmake python3-pip libocct-foundation-dev libocct-data-exchange-dev
-    - name: Install build tools
-      run: |
-        pip3 install --no-cache-dir -U conan meson ninja
-    - name: Configuring Conan
-      run: |
-        conan config init
-        conan profile update settings.compiler.libcxx=libstdc++11 default
+        apt-get -y install cmake catch2 libocct-foundation-dev libocct-data-exchange-dev
     - name: Build
       run: |
-        meson setup build
-        meson compile -C build
+        cmake build . -B build
+        cmake --build build
     - name: Test
       run: |
-        meson test -vC build
+        build/test_runner

@@ -350,19 +350,19 @@ cube_at(double x, double y, double z, double length)
 	return BRepPrimAPI_MakeBox(gp_Pnt(x, y, z), length, length, length).Shape();
 }
 
-TEST_SUITE("classify_solid_intersection") {
-	TEST_CASE("two identical objects completely overlap") {
+TEST_CASE("classify_solid_intersection") {
+	SECTION("two identical objects completely overlap") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
 		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result.status, intersect_status::overlap);
-		CHECK_EQ(result.vol_common, doctest::Approx(10*10*10));
-		CHECK_EQ(result.vol_cut, doctest::Approx(0));
-		CHECK_EQ(result.vol_cut12, doctest::Approx(0));
+		REQUIRE(result.status == intersect_status::overlap);
+		CHECK(result.vol_common == Approx(10*10*10));
+		CHECK(result.vol_cut == Approx(0));
+		CHECK(result.vol_cut12 == Approx(0));
 	}
 
-	TEST_CASE("smaller object contained in larger one overlap") {
+	SECTION("smaller object contained in larger one overlap") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(2, 2, 2, 6);
 
 		const double
@@ -371,48 +371,48 @@ TEST_SUITE("classify_solid_intersection") {
 
 		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result.status, intersect_status::overlap);
-		CHECK_EQ(result.vol_common, doctest::Approx(v2));
-		CHECK_EQ(result.vol_cut, doctest::Approx(v1 - v2));
-		CHECK_EQ(result.vol_cut12, doctest::Approx(0));
+		REQUIRE(result.status == intersect_status::overlap);
+		CHECK(result.vol_common == Approx(v2));
+		CHECK(result.vol_cut == Approx(v1 - v2));
+		CHECK(result.vol_cut12 == Approx(0));
 	}
 
-	TEST_CASE("distinct objects don't overlap") {
+	SECTION("distinct objects don't overlap") {
 		const auto s1 = cube_at(0, 0, 0, 4), s2 = cube_at(5, 5, 5, 4);
 
 		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result.status, intersect_status::distinct);
-		WARN_EQ(result.vol_common, -1);
-		WARN_EQ(result.vol_cut, -1);
-		WARN_EQ(result.vol_cut12, -1);
+		REQUIRE(result.status == intersect_status::distinct);
+		CHECK(result.vol_common == -1);
+		CHECK(result.vol_cut == -1);
+		CHECK(result.vol_cut12 == -1);
 	}
 
-	TEST_CASE("objects touching") {
+	SECTION("objects touching") {
 		int x = 0, y = 0, z = 0;
 
-		SUBCASE("vertex") { x = y = z = 5; }
-		SUBCASE("edge") { y = z = 5; }
-		SUBCASE("face") { z = 5; }
+		SECTION("vertex") { x = y = z = 5; }
+		SECTION("edge") { y = z = 5; }
+		SECTION("face") { z = 5; }
 
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(x, y, z, 5);
 
 		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result.status, intersect_status::touching);
+		REQUIRE(result.status == intersect_status::touching);
 	}
 
-	TEST_CASE("objects near fuzzy value") {
+	SECTION("objects near fuzzy value") {
 		double z = 0;
 		auto expected = intersect_status::touching;
 
-		SUBCASE("overlap") {
+		SECTION("overlap") {
 			z = 4.4;
 			expected = intersect_status::overlap;
 		}
-		SUBCASE("ok overlap") { z = 4.6; }
-		SUBCASE("ok gap") { z = 5.4; }
-		SUBCASE("distinct") {
+		SECTION("ok overlap") { z = 4.6; }
+		SECTION("ok gap") { z = 5.4; }
+		SECTION("distinct") {
 			z = 5.6;
 			expected = intersect_status::distinct;
 		}
@@ -421,7 +421,7 @@ TEST_SUITE("classify_solid_intersection") {
 
 		const auto result = classify_solid_intersection(s1, s2, 0.5);
 
-		REQUIRE_EQ(result.status, expected);
+		REQUIRE(result.status == expected);
 	}
 }
 #endif
@@ -541,88 +541,88 @@ imprint_result perform_solid_imprinting(
 #ifdef INCLUDE_TESTS
 #include <BRepPrimAPI_MakeBox.hxx>
 
-TEST_SUITE("perform_solid_imprinting") {
-	TEST_CASE("two identical objects") {
+TEST_CASE("perform_solid_imprinting") {
+	SECTION("two identical objects") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
 		const auto res = perform_solid_imprinting(s1, s2, 0.5);
 
 		switch (res.status) {
 		case imprint_status::merge_into_shape:
-			CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(10*10*10));
-			CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(0));
+			CHECK(volume_of_shape(res.shape) == Approx(10*10*10));
+			CHECK(volume_of_shape(res.tool) == Approx(0));
 			break;
 		case imprint_status::merge_into_tool:
-			CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(0));
-			CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(10*10*10));
+			CHECK(volume_of_shape(res.shape) == Approx(0));
+			CHECK(volume_of_shape(res.tool) == Approx(10*10*10));
 			break;
 		default:
 			// unreachable if working
 			REQUIRE(false);
 		}
 
-		CHECK_EQ(res.vol_common, doctest::Approx(10*10*10));
-		CHECK_EQ(res.vol_cut, 0);
-		CHECK_EQ(res.vol_cut12, 0);
+		CHECK(res.vol_common == Approx(10*10*10));
+		CHECK(res.vol_cut == 0);
+		CHECK(res.vol_cut12 == 0);
 	}
 
-	TEST_CASE("two independent objects") {
+	SECTION("two independent objects") {
 		const auto s1 = cube_at(0, 0, 0, 4), s2 = cube_at(5, 0, 0, 4);
 
 		const auto res = perform_solid_imprinting(s1, s2, 0.5);
-		REQUIRE_EQ(res.status, imprint_status::distinct);
+		REQUIRE(res.status == imprint_status::distinct);
 
-		CHECK_EQ(res.vol_common, 0);
-		CHECK_EQ(res.vol_cut, doctest::Approx(4*4*4));
-		CHECK_EQ(res.vol_cut12, doctest::Approx(4*4*4));
+		CHECK(res.vol_common == 0);
+		CHECK(res.vol_cut == Approx(4*4*4));
+		CHECK(res.vol_cut12 == Approx(4*4*4));
 
-		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(4*4*4));
-		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(4*4*4));
+		CHECK(volume_of_shape(res.shape) == Approx(4*4*4));
+		CHECK(volume_of_shape(res.tool) == Approx(4*4*4));
 	}
 
-	TEST_CASE("two touching objects") {
+	SECTION("two touching objects") {
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(5, 0, 0, 5);
 
 		const auto res = perform_solid_imprinting(s1, s2, 0.5);
-		REQUIRE_EQ(res.status, imprint_status::distinct);
+		REQUIRE(res.status == imprint_status::distinct);
 
-		CHECK_EQ(res.vol_common, 0);
-		CHECK_EQ(res.vol_cut, doctest::Approx(5*5*5));
-		CHECK_EQ(res.vol_cut12, doctest::Approx(5*5*5));
+		CHECK(res.vol_common == 0);
+		CHECK(res.vol_cut == Approx(5*5*5));
+		CHECK(res.vol_cut12 == Approx(5*5*5));
 
-		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(5*5*5));
-		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(5*5*5));
+		CHECK(volume_of_shape(res.shape) == Approx(5*5*5));
+		CHECK(volume_of_shape(res.tool) == Approx(5*5*5));
 	}
 
-	TEST_CASE("two objects overlapping at corner") {
+	SECTION("two objects overlapping at corner") {
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(4, 4, 4, 2);
 
 		const auto res = perform_solid_imprinting(s1, s2, 0.1);
-		REQUIRE_EQ(res.status, imprint_status::merge_into_shape);
+		REQUIRE(res.status == imprint_status::merge_into_shape);
 
-		CHECK_EQ(res.vol_common, doctest::Approx(1));
-		CHECK_EQ(res.vol_cut, doctest::Approx(5*5*5-1));
-		CHECK_EQ(res.vol_cut12, doctest::Approx(2*2*2-1));
+		CHECK(res.vol_common == Approx(1));
+		CHECK(res.vol_cut == Approx(5*5*5-1));
+		CHECK(res.vol_cut12 == Approx(2*2*2-1));
 
-		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(5*5*5));
-		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(2*2*2-1));
+		CHECK(volume_of_shape(res.shape) == Approx(5*5*5));
+		CHECK(volume_of_shape(res.tool) == Approx(2*2*2-1));
 	}
 
-	TEST_CASE("two objects overlapping in middle") {
+	SECTION("two objects overlapping in middle") {
 		// s1 should divide s2 in half, one of these halves should be merged
 		// into s1
 		const auto s1 = cube_at(3, 1, 1, 2), s2 = cube_at(0, 0, 0, 4);
 
 		const auto res = perform_solid_imprinting(s1, s2, 0.1);
-		REQUIRE_EQ(res.status, imprint_status::merge_into_tool);
+		REQUIRE(res.status == imprint_status::merge_into_tool);
 
 		const double half_s1 = 2*2*2 / 2.;
-		CHECK_EQ(res.vol_common, doctest::Approx(half_s1));
-		CHECK_EQ(res.vol_cut, doctest::Approx(half_s1));
-		CHECK_EQ(res.vol_cut12, doctest::Approx(4*4*4 - half_s1));
+		CHECK(res.vol_common == Approx(half_s1));
+		CHECK(res.vol_cut == Approx(half_s1));
+		CHECK(res.vol_cut12 == Approx(4*4*4 - half_s1));
 
-		CHECK_EQ(volume_of_shape(res.shape), doctest::Approx(half_s1));
-		CHECK_EQ(volume_of_shape(res.tool), doctest::Approx(4*4*4));
+		CHECK(volume_of_shape(res.shape) == Approx(half_s1));
+		CHECK(volume_of_shape(res.tool) == Approx(4*4*4));
 	}
 }
 

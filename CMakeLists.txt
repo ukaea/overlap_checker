@@ -23,10 +23,10 @@ link_libraries(
 # pull in our external header-only libraries
 include_directories(SYSTEM "include")
 
-#find_package(Catch2 REQUIRED)
-#add_executable(test_runner src/test_runner.cpp src/document.cpp src/utils.cpp)
-#target_link_libraries(test_runner Catch2::Catch2)
-#target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
+find_package(Catch2 REQUIRED)
+add_executable(test_runner src/test_runner.cpp src/document.cpp src/utils.cpp)
+target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
+target_link_libraries(test_runner Catch2::Catch2)
 
 add_library(shared OBJECT src/utils.cpp src/document.cpp)
 

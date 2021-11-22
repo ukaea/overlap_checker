@@ -54,16 +54,16 @@ are_vals_close(const double a, const double b, const double drel, const double d
 }
 
 #ifdef INCLUDE_TESTS
-TEST_SUITE("are_vals_close") {
-	TEST_CASE("identical values") {
+TEST_CASE("are_vals_close") {
+	SECTION("identical values") {
 		CHECK(are_vals_close(0, 0));
 		CHECK(are_vals_close(1, 1));
 	}
-	TEST_CASE("close values") {
+	SECTION("close values") {
 		CHECK(are_vals_close(0, 1e-15));
 		CHECK(are_vals_close(1, 1+1e-15));
 	}
-	TEST_CASE("far values") {
+	SECTION("far values") {
 		CHECK_FALSE(are_vals_close(0, 1));
 		CHECK_FALSE(are_vals_close(1, 0));
 		CHECK_FALSE(are_vals_close(0, 1e-10));
@@ -110,50 +110,50 @@ bool size_t_of_string(const char *s, size_t &i, int base)
 }
 
 #ifdef INCLUDE_TESTS
-TEST_SUITE("int_of_string") {
-	TEST_CASE("success") {
+TEST_CASE("int_of_string") {
+	SECTION("success") {
 		int val = -1;
 		CHECK(int_of_string("0", val));
-		CHECK_EQ(val, 0);
+		CHECK(val == 0);
 		CHECK(int_of_string("1", val));
-		CHECK_EQ(val, 1);
+		CHECK(val == 1);
 		CHECK(int_of_string("-1", val));
-		CHECK_EQ(val, -1);
+		CHECK(val == -1);
 		CHECK(int_of_string("0x10", val));
-		CHECK_EQ(val, 16);
+		CHECK(val == 16);
 		CHECK(int_of_string("ff", val, 16));
-		CHECK_EQ(val, 255);
+		CHECK(val == 255);
 	}
-	TEST_CASE("failure") {
+	SECTION("failure") {
 		int val = -1;
 		CHECK_FALSE(int_of_string("", val));
-		CHECK_EQ(val, -1);
+		CHECK(val == -1);
 		CHECK_FALSE(int_of_string("zzz", val));
-		CHECK_EQ(val, -1);
+		CHECK(val == -1);
 	}
 }
-TEST_SUITE("size_t_of_string") {
-	TEST_CASE("success") {
+TEST_CASE("size_t_of_string") {
+	SECTION("success") {
 		size_t val = 1;
 		CHECK(size_t_of_string("0", val));
-		CHECK_EQ(val, 0);
+		CHECK(val == 0);
 		CHECK(size_t_of_string("1", val));
-		CHECK_EQ(val, 1);
+		CHECK(val == 1);
 		CHECK(size_t_of_string("0x10", val));
-		CHECK_EQ(val, 16);
+		CHECK(val == 16);
 		CHECK(size_t_of_string("ff", val, 16));
-		CHECK_EQ(val, 255);
+		CHECK(val == 255);
 	}
-	TEST_CASE("failure") {
+	SECTION("failure") {
 		size_t val = 7;
 		CHECK_FALSE(size_t_of_string("", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 		CHECK_FALSE(size_t_of_string("-1", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 		CHECK_FALSE(size_t_of_string("18446744073709551616", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 		CHECK_FALSE(size_t_of_string("zzz", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 	}
 }
 #endif
