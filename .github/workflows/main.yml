@@ -10,7 +10,7 @@ jobs:
     - name: Install system packages
       run: |
         apt-get -y update
-        apt-get -y install cmake catch2 libocct-foundation-dev libocct-data-exchange-dev
+        apt-get -y install g++ cmake catch2 libocct-foundation-dev libocct-data-exchange-dev
     - name: Build
       run: |
         cmake build . -B build
