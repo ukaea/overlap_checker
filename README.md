@@ -188,6 +188,9 @@ from the input file and outputs them to standard out, under the
 expectation that this is directed to a file so it can be used by other
 tools.
 
+Note that the `brep_flatten` tool might be useful if you already have
+a BREP file that you got from somewhere else.
+
 ## `overlap_checker`
 
 This tool performs pairwise comparisons between all nearby solids
@@ -229,3 +232,45 @@ and aims to produce output compatible with [occ_faceter][].
 
 [pyvenv]: https://docs.python.org/3/tutorial/venv.html
 [occ_faceter]: https://github.com/makeclean/occ_faceter/
+
+
+# File formats
+
+The geometry data is stored in [BREP][] format with some constraints
+designed to simplify subsequent processing tasks. Our workflow is
+centered around [solids][occt_topological_types] and their materials.
+Each solid has a defined material, and it's important to be able to
+maintain this link during the processing steps. During import, e.g.
+`step_to_brep`, the hierchial structure is flattened to a list of
+solids, represented in OCCT and the BREP file as a COMPOUND. A CSV
+file describing material information is also written that uses the
+same ordering.
+
+Subsequent tools that modify the shapes, e.g. `imprint_solids`,
+maintain the top-level order. For example if there is an intersection
+between shapes 3 and 4, the overlapping volume will be added to the
+larger shape (e.g. shape 4). Hence, after imprinting shape 3 will be
+slightly smaller while shape 4 will now be a COMPSOLID containing two
+SOLIDS, one solid being this small intersecting volume and a copy of
+shape 4 that has been modified to remove this intersection.
+
+As a visual representation, our BREP format has a COMPOUND as the
+top-level shape with either SOLIDS or COMPSOLIDs inside. For example,
+after the above imprinting we might have:
+
+```
+ * COMPOUND
+   * SOLID
+   * SOLID
+   * SOLID
+   * SOLID
+   * COMPSOLID
+     * SOLID
+     * SOLID
+   * SOLID
+```
+
+note that numbering is zero based.
+
+[brep_format]: https://dev.opencascade.org/doc/occt-6.7.0/overview/html/occt_brep_format.html
+[occt_topological_types]: https://dev.opencascade.org/doc/overview/html/occt_user_guides__modeling_data.html#occt_modat_5_2_1
