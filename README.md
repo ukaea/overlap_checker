@@ -160,6 +160,9 @@ grep overlap overlaps.csv | overlap_collecter test_geometry.brep common.brep
 
 # perform imprinting
 imprint_solids test_geometry.brep imprinted.brep < overlaps.csv
+
+# merging of imprinted solids
+merge_solids imprinted.brep merged.brep
 ```
 
 # Tool descriptions
@@ -217,4 +220,12 @@ uses the same tolerance options as `overlap_checker`, and hence
 vertices/edges of "touching" shapes might move due nearby shapes being
 within this tolerance.
 
+## `merge_solids`
+
+This tool glues shared parts of solids together. It works from
+verticies upto compound solid, merging any shared edges/faces as
+appropriate. This is an intermediate step in our neutronics workflow
+and aims to produce output compatible with [occ_faceter][].
+
 [pyvenv]: https://docs.python.org/3/tutorial/venv.html
+[occ_faceter]: https://github.com/makeclean/occ_faceter/
