@@ -156,7 +156,7 @@ main(int argc, char **argv)
 	configure_aixlog();
 
 	std::string path_in;
-	unsigned num_parallel_jobs = 4;
+	unsigned num_parallel_jobs = 1;
 	double
 		bbox_clearance = 0.5,
 		max_common_volume_ratio = 0.01;
