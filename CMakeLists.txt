@@ -21,7 +21,8 @@ link_libraries(
   TKXSBase TKXDESTEP TKShHealing)
 
 # pull in our external header-only libraries
-include_directories(SYSTEM "include")
+include_directories(SYSTEM "aixlog/include")
+include_directories(SYSTEM "cxx_argp")
 
 find_package(Catch2 REQUIRED)
 add_executable(test_runner src/test_runner.cpp src/document.cpp src/utils.cpp)

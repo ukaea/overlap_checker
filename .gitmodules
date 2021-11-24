@@ -1,0 +1,7 @@
+[submodule "cxx_argp"]
+	path = cxx_argp
+	url = https://github.com/pboettch/cxx_argp
+
+[submodule "aixlog"]
+	path = aixlog
+	url = https://github.com/badaix/aixlog
