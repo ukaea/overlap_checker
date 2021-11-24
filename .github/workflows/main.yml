@@ -10,8 +10,8 @@ jobs:
         submodules: recursive
     - name: Install system packages
       run: |
-        apt-get -y update
-        apt-get -y install g++ cmake catch2 libocct-foundation-dev libocct-data-exchange-dev
+        sudo apt-get -y update
+        sudo apt-get -y install g++ cmake catch2 libocct-foundation-dev libocct-data-exchange-dev
     - name: Build
       run: |
         cmake build . -B build
