@@ -91,11 +91,11 @@ main(int argc, char **argv)
 	std::string path_in, path_out;
 
 	{
-		const char *doc = (
+		const auto doc = (
 			"Perform imprinting of touching and overlapping solids, writing results to BREP file.\n"
 			"\n"
 			"The intersection of any overlapping shapes will be assigned to the one with a larger volume.");
-		const char *usage = "input.brep output.brep";
+		const auto usage = "input.brep output.brep";
 
 		cxx_argp::parser argp(2);
 		if (!argp.parse(argc, argv, usage, doc)) {
