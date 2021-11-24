@@ -1,7 +1,8 @@
 #include <cstdlib>
 
 #ifdef INCLUDE_TESTS
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #endif
 
 #include <BOPAlgo_PaveFiller.hxx>
@@ -351,6 +352,8 @@ cube_at(double x, double y, double z, double length)
 }
 
 TEST_CASE("classify_solid_intersection") {
+	using Catch::Approx;
+
 	SECTION("two identical objects completely overlap") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
@@ -542,6 +545,8 @@ imprint_result perform_solid_imprinting(
 #include <BRepPrimAPI_MakeBox.hxx>
 
 TEST_CASE("perform_solid_imprinting") {
+	using Catch::Approx;
+
 	SECTION("two identical objects") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 

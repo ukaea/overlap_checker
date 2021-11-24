@@ -25,9 +25,9 @@ include_directories(SYSTEM "aixlog/include")
 include_directories(SYSTEM "cxx_argp")
 
 add_subdirectory(Catch2)
-add_executable(test_runner src/test_runner.cpp src/document.cpp src/utils.cpp)
+add_executable(test_runner src/document.cpp src/utils.cpp)
 target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
-target_link_libraries(test_runner Catch2::Catch2)
+target_link_libraries(test_runner Catch2WithMain)
 
 add_library(shared OBJECT src/utils.cpp src/document.cpp)
 
