@@ -207,9 +207,12 @@ main(int argc, char **argv)
 		assert(args.size() == 1);
 		path_in = args[0];
 
-		if (num_parallel_jobs < 1 || num_parallel_jobs > 1024) {
+		// when do we start complaining that the user is doing something silly
+		const unsigned parallel_job_limit = 1024;
+		if (num_parallel_jobs < 1 || num_parallel_jobs > parallel_job_limit) {
 			LOG(ERROR)
-				<< "Number of parallel jobs must be between 1 and 1024.\n";
+				<< "Number of parallel jobs must be between 1 and "
+				<< parallel_job_limit << ".\n";
 			return 1;
 		}
 		unsigned max_parallel = std::thread::hardware_concurrency();
