@@ -1,15 +1,14 @@
 name: compile and test
 on: [push, pull_request]
 
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
-
 jobs:
   build:
     runs-on: ubuntu-latest
     container: debian:bullseye
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Install system packages
       run: |
         apt-get -y update
