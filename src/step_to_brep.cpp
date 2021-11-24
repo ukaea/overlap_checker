@@ -344,9 +344,9 @@ main(int argc, char **argv)
 		stream << "Fix-up wireframes and shapes in geometry (" << (fix_geometry ? "yes" : "no") << ")";
 		auto fix_geometry_help = stream.str();
 
-		cxx_argp::parser argp(2);
+		tool_argp_parser argp(2);
 		argp.add_option(
-			{"min-volume", 'v', "volume", 0, min_volume_help.c_str()},
+			{"min-volume", 1023, "volume", 0, min_volume_help.c_str()},
 			minimum_volume);
 		argp.add_option(
 			{"check-geometry", 1024, nullptr, 0, check_geometry_help.c_str()},

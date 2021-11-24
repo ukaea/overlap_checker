@@ -74,7 +74,7 @@ main(int argc, char **argv)
 		const char *doc = "Collect overlapping areas of solids and write to BREP file.";
 		const char *usage = "input.brep output.brep";
 
-		cxx_argp::parser argp(2);
+		tool_argp_parser argp(2);
 		if (!argp.parse(argc, argv, usage, doc)) {
 			return 1;
 		}

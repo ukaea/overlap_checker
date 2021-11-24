@@ -97,7 +97,7 @@ main(int argc, char **argv)
 			"The intersection of any overlapping shapes will be assigned to the one with a larger volume.");
 		const auto usage = "input.brep output.brep";
 
-		cxx_argp::parser argp(2);
+		tool_argp_parser argp(2);
 		if (!argp.parse(argc, argv, usage, doc)) {
 			return 1;
 		}

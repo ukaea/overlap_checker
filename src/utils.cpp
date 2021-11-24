@@ -12,8 +12,62 @@
 #endif
 
 #include <aixlog.hpp>
+#include <cxx_argp_parser.h>
 
 #include "utils.hpp"
+
+static auto aixlog_severity = AixLog::Severity::info;
+static std::shared_ptr<AixLog::Sink> aixlog_sink;
+
+#define OPT_USAGE -3
+
+tool_argp_parser::tool_argp_parser(int expected_args) : cxx_argp::parser(expected_args)
+{
+	add_flags(ARGP_NO_HELP);
+	help_via_argp_flags = false;
+
+	add_option(
+		{"verbose", 'v', nullptr, 0, "Increase verbosity of output, can be repeated"},
+		[](int, const char *, struct argp_state*) {
+			// go through severity levels:  Info => Debug => Trace
+			if (aixlog_severity > AixLog::Severity::debug){
+				if (aixlog_severity > AixLog::Severity::info) {
+					aixlog_severity = AixLog::Severity::info;
+				} else {
+					aixlog_severity = AixLog::Severity::debug;
+				}
+			} else if (aixlog_severity > AixLog::Severity::trace) {
+				aixlog_severity = AixLog::Severity::trace;
+			}
+			aixlog_sink->filter.add_filter(aixlog_severity);
+			return 0;
+		});
+
+	add_option(
+		{"quiet", 'q', nullptr, 0, "Decrease verbosity of output"},
+		[](int, const char *, struct argp_state*) {
+			aixlog_sink->filter.add_filter(
+				aixlog_severity = AixLog::Severity::warning);
+			return 0;
+		});
+
+	add_option(
+		{"help", 'h', nullptr, 0, "Give this help list"},
+		[](int, const char *, struct argp_state* state) {
+			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
+			std::exit(0);
+			return 0;
+		});
+
+	add_option(
+		{"usage", OPT_USAGE, nullptr, 0, "Give a short usage message"},
+		[](int, const char *, struct argp_state* state) {
+			argp_state_help(state, stderr, ARGP_HELP_STD_USAGE);
+			std::exit(0);
+			return 0;
+		});
+}
+
 
 void configure_aixlog()
 {
@@ -33,7 +87,7 @@ void configure_aixlog()
 		std::cout << message << '\n';
 	};
 
-	AixLog::Log::init<AixLog::SinkCallback>(AixLog::Severity::trace, callback);
+	aixlog_sink = AixLog::Log::init<AixLog::SinkCallback>(aixlog_severity, callback);
 }
 
 

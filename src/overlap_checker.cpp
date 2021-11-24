@@ -189,7 +189,7 @@ main(int argc, char **argv)
 		auto help_max_common = stream.str();
 		stream = {};
 
-		cxx_argp::parser argp(1);
+		tool_argp_parser argp(1);
 		argp.add_option(
 			{"jobs", 'j', "N", 0, help_num_par_jobs.c_str()}, num_parallel_jobs);
 		argp.add_option(

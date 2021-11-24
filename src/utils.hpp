@@ -2,6 +2,15 @@
 #include <string>
 #include <vector>
 
+#include <cxx_argp_parser.h>
+
+
+class tool_argp_parser : public cxx_argp::parser {
+public:
+	tool_argp_parser(int expected_args = 0);
+};
+
+
 void configure_aixlog();
 
 bool int_of_string (const char *s, int &i, int base=0);
