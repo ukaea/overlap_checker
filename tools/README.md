@@ -28,5 +28,14 @@ step_to_brep paramak_reactor.step paramak_reactor.brep
 salome_geom_gluer2 paramak_reactor.brep paramak_reactor-salome_glued.brep
 ```
 
+## Warning
+
+I've made some changes to the internals of the glueing, nominally
+attempting to improve numerical stability. Due to these changes, the
+output of the above doesn't exactly match the output from my glueing
+code. As there are only a few numerical differences these can be
+manually verified and a known-good version committed to the repo for
+tests.
+
 [cadquery]: https://github.com/CadQuery/cadquery
 [paramak install]: https://paramak.readthedocs.io/en/main/install.html
