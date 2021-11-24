@@ -1,6 +1,9 @@
 name: compile and test
 on: [push, pull_request]
 
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
 jobs:
   build:
     runs-on: ubuntu-latest
