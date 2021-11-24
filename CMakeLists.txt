@@ -24,7 +24,7 @@ link_libraries(
 include_directories(SYSTEM "aixlog/include")
 include_directories(SYSTEM "cxx_argp")
 
-find_package(Catch2 REQUIRED)
+add_subdirectory(Catch2)
 add_executable(test_runner src/test_runner.cpp src/document.cpp src/utils.cpp)
 target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
 target_link_libraries(test_runner Catch2::Catch2)
@@ -39,4 +39,3 @@ target_link_libraries(overlap_checker pthread)
 add_executable(overlap_collecter src/overlap_collecter.cpp $<TARGET_OBJECTS:shared>)
 
 add_executable(imprint_solids src/imprint_solids.cpp $<TARGET_OBJECTS:shared>)
-
