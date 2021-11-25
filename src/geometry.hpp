@@ -1,9 +1,15 @@
 #include <vector>
+#include <ostream>
 
 // from opencascade
 #include <TopoDS_Shape.hxx>
+#include <BRepCheck_Status.hxx>
 #include <BRepAlgoAPI_BooleanOperation.hxx>
-class BOPAlgo_PaveFiller;
+
+
+std::ostream& operator<<(std::ostream& str, TopAbs_ShapeEnum type);
+std::ostream& operator<<(std::ostream& str, BRepCheck_Status type);
+
 
 double volume_of_shape(const class TopoDS_Shape& shape);
 double distance_between_shapes(const TopoDS_Shape& a, const TopoDS_Shape& b);
@@ -21,6 +27,8 @@ struct document {
 	// only integer indexes supported at the moment, returns -1 if invalid
 	int lookup_solid(const std::string &str) const;
 };
+
+class BOPAlgo_PaveFiller;
 
 class boolean_op : public BRepAlgoAPI_BooleanOperation
 {

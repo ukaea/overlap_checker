@@ -2,7 +2,16 @@
 #include <string>
 #include <vector>
 
-void configure_spdlog();
+#include <cxx_argp_parser.h>
+
+
+class tool_argp_parser : public cxx_argp::parser {
+public:
+	tool_argp_parser(int expected_args = 0);
+};
+
+
+void configure_aixlog();
 
 bool int_of_string (const char *s, int &i, int base=0);
 bool size_t_of_string (const char *s, size_t &i, int base=0);
