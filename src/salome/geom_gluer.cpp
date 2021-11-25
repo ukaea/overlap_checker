@@ -104,6 +104,16 @@ template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
 
 // unnamed namespace for internal linkage
 namespace {
+	bool isCompoundShape(const TopoDS_Shape& shape) {
+		switch (shape.ShapeType()) {
+		case TopAbs_COMPOUND:
+		case TopAbs_COMPSOLID:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	class BoundingSphere  {
 		gp_Pnt center;
 		Standard_Real radius;
@@ -808,7 +818,7 @@ namespace {
 		if (myOrigins.IsBound(shape)) {
 			return true;
 		}
-		if (shape.ShapeType() == TopAbs_COMPOUND || shape.ShapeType() == TopAbs_COMPSOLID) {
+		if (isCompoundShape(shape)) {
 			for (TopoDS_Iterator it{shape}; it.More(); it.Next()) {
 				if (is_child_bound_in_origins(it.Value())) {
 					return true;
@@ -976,7 +986,7 @@ namespace {
 		builder.MakeCompound(compound);
 		for (TopoDS_Iterator it{shape}; it.More(); it.Next()) {
 			const TopoDS_Shape& child = it.Value();
-			if (child.ShapeType() == TopAbs_COMPOUND) {
+			if (isCompoundShape(child)) {
 				FillCompound(child);
 			}
 			if (myOrigins.IsBound(child)) {
@@ -995,7 +1005,7 @@ namespace {
 	{
 		for (TopoDS_Iterator it{myArgument}; it.More(); it.Next()) {
 			const TopoDS_Shape& shape = it.Value();
-			if (shape.ShapeType() == TopAbs_COMPOUND) {
+			if (isCompoundShape(shape)) {
 				FillCompound(shape);
 			}
 		}
