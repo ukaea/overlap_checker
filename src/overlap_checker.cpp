@@ -163,9 +163,15 @@ main(int argc, char **argv)
 	std::vector<double> imprint_tolerances = {0.001, 0};
 
 	{
-		const char * doc = "Perform imprinting of BREP shapes.";
+		const char * doc = (
+			"Find all pairwise intersections between solids.\n"
+			"\n"
+			"Will output a CSV file to stdout containing a row "
+			"for each pair of nearby shapes categorised as:"
+			"'touch' when edges or verticies intersect, "
+			"'overlap' when shapes overlap < the common volume ratio, and "
+			"'bad_overlap' when they overlap by more.");
 		const char * usage = "input.brep";
-
 
 		std::stringstream stream;
 
