@@ -269,9 +269,18 @@ main(int argc, char **argv)
 	LOG(DEBUG) << "starting imprinting\n";
 
 	worker_queue queue;
+	unsigned long
+		num_bbox_tests = 0,
+		num_processed = 0,
+		num_failed = 0,
+		num_touching = 0,
+		num_overlaps = 0,
+		num_bad_overlaps = 0;
 
 	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
 		for (size_t lo = 0; lo < hi; lo++) {
+			num_bbox_tests += 1;
+
 			// seems reasonable to assume majority of shapes aren't close to
 			// overlapping, so check with coarser limit first
 			if (are_bboxs_disjoint(
@@ -286,9 +295,7 @@ main(int argc, char **argv)
 
 	{
 		size_t
-			remain = queue.input_size(),
-			num_failed = 0,
-			num_intersected = 0;
+			remain = queue.input_size();
 
 		LOG(DEBUG) << "launching " << num_parallel_jobs << " worker threads\n";
 
@@ -301,6 +308,7 @@ main(int argc, char **argv)
 
 		while (remain--) {
 			worker_output output = queue.next_output();
+			num_processed += 1;
 
 			size_t hi = output.hi, lo = output.lo;
 
@@ -317,6 +325,7 @@ main(int argc, char **argv)
 				break;
 			case intersect_status::touching:
 				std::cout << hi << ',' << lo << ",touch\n";
+				num_touching += 1;
 				break;
 			case intersect_status::overlap: {
 				const double
@@ -334,11 +343,12 @@ main(int argc, char **argv)
 					LOG(ERROR)
 						<< hi_lo.str() << " overlap by more than " << overlap_msg.str();
 					std::cout << hi << ',' << lo << ",bad_overlap\n";
-					num_intersected += 1;
+					num_bad_overlaps += 1;
 				} else {
 					LOG(INFO)
 						<< hi_lo.str() << " overlap by less than " << overlap_msg.str();
 					std::cout << hi << ',' << lo << ",overlap\n";
+					num_overlaps += 1;
 				}
 				break;
 			}
@@ -353,11 +363,20 @@ main(int argc, char **argv)
 			thread.join();
 		}
 
-		if (num_failed || num_intersected) {
+		LOG(INFO)
+			<< "processing summary: "
+			<< "bbox tests=" << num_bbox_tests << ", "
+			<< "intersection tests=" << num_processed << ", "
+			<< "touching=" << num_touching << ", "
+			<< "overlapping=" << num_overlaps << ", "
+			<< "bad overlaps=" << num_bad_overlaps << ", "
+			<< "tests failed=" << num_failed << '\n';
+
+		if (num_failed || num_bad_overlaps) {
 			LOG(ERROR)
-				<< "errors occurred while processing, "
-				<< num_failed << " failed, "
-				<< num_intersected << " intersected\n";
+				<< "errors occurred while processing: "
+				<< "intersection tests failed=" << num_failed << ", "
+				<< "overlapped by too much=" << num_bad_overlaps << '\n';
 			return 1;
 		}
 	}
