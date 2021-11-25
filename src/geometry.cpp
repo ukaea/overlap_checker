@@ -30,7 +30,7 @@
 
 #include <aixlog.hpp>
 
-#include "document.hpp"
+#include "geometry.hpp"
 #include "utils.hpp"
 
 std::ostream&

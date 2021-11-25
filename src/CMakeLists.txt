@@ -7,7 +7,7 @@ link_libraries(
   TKTopAlgo TKXCAF TKSTEP
   TKXSBase TKXDESTEP TKShHealing)
 
-add_library(shared OBJECT utils.cpp document.cpp)
+add_library(shared OBJECT utils.cpp geometry.cpp)
 
 add_executable(step_to_brep step_to_brep.cpp $<TARGET_OBJECTS:shared>)
 
@@ -20,7 +20,7 @@ add_executable(imprint_solids imprint_solids.cpp $<TARGET_OBJECTS:shared>)
 
 
 if(BUILD_TESTING)
-  add_executable(test_runner document.cpp utils.cpp)
+  add_executable(test_runner geometry.cpp utils.cpp)
   target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
   target_link_libraries(test_runner Catch2WithMain)
 
