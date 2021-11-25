@@ -20,4 +20,4 @@ jobs:
         cmake --build build
     - name: Test
       run: |
-        build/test_runner
+        env -C build ctest

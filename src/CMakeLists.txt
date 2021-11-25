@@ -24,5 +24,5 @@ if(BUILD_TESTING)
   target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
   target_link_libraries(test_runner Catch2WithMain)
 
-  add_test(unit-tests test_runner)
+  add_test(NAME unit-tests COMMAND test_runner)
 endif()
