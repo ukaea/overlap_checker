@@ -236,7 +236,7 @@ and aims to produce output compatible with [occ_faceter][].
 
 # File formats
 
-The geometry data is stored in [BREP][] format with some constraints
+The geometry data is stored in [BREP][brep_format] format with some constraints
 designed to simplify subsequent processing tasks. Our workflow is
 centered around [solids][occt_topological_types] and their materials.
 Each solid has a defined material, and it's important to be able to
