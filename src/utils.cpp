@@ -78,13 +78,13 @@ void configure_aixlog()
 	auto callback = [reference](const AixLog::Metadata& metadata, const std::string& message) {
 		if (metadata.timestamp) {
 			auto elapsed = std::chrono::duration<double>(metadata.timestamp.time_point - reference);
-			std::cout << std::fixed << std::setprecision(3) << elapsed.count();
+			std::cerr << std::fixed << std::setprecision(3) << elapsed.count();
 		}
-		std::cout << " [" << AixLog::to_string(metadata.severity) << "] ";
+		std::cerr << " [" << AixLog::to_string(metadata.severity) << "] ";
 		if (metadata.tag) {
-			std::cout << '(' << metadata.tag.text << ") ";
+			std::cerr << '(' << metadata.tag.text << ") ";
 		}
-		std::cout << message << '\n';
+		std::cerr << message << '\n';
 	};
 
 	aixlog_sink = AixLog::Log::init<AixLog::SinkCallback>(aixlog_severity, callback);
