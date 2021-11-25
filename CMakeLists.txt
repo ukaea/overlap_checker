@@ -5,37 +5,24 @@ project(overlap_checker LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 
 include(CheckSymbolExists)
+include(CTest)
+
 check_symbol_exists(argp_parse "argp.h" HAVE_ARGP)
 if(NOT (HAVE_ARGP))
   message(SEND_ERROR "GNU argp is required for command line parsing")
 endif()
 
-# OpenCascade stuff
+# OpenCascade stuff, should be using proper cmake file but not sure
+# which one(s)
 find_path(OCC_INC "Standard_Version.hxx" HINTS "/usr/include/opencascade" REQUIRED)
 include_directories(SYSTEM ${OCC_INC})
-link_libraries(
-  TKernel
-  TKBO TKBRep TKPrim
-  TKG3d TKLCAF TKMath
-  TKTopAlgo TKXCAF TKSTEP
-  TKXSBase TKXDESTEP TKShHealing)
 
 # pull in our external header-only libraries
 include_directories(SYSTEM "aixlog/include")
 include_directories(SYSTEM "cxx_argp")
-
 add_subdirectory(Catch2)
-add_executable(test_runner src/document.cpp src/utils.cpp)
-target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
-target_link_libraries(test_runner Catch2WithMain)
 
-add_library(shared OBJECT src/utils.cpp src/document.cpp)
+# place binaries in build rather than build/src
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
-add_executable(step_to_brep src/step_to_brep.cpp $<TARGET_OBJECTS:shared>)
-
-add_executable(overlap_checker src/overlap_checker.cpp $<TARGET_OBJECTS:shared>)
-target_link_libraries(overlap_checker pthread)
-
-add_executable(overlap_collecter src/overlap_collecter.cpp $<TARGET_OBJECTS:shared>)
-
-add_executable(imprint_solids src/imprint_solids.cpp $<TARGET_OBJECTS:shared>)
+add_subdirectory(src)
