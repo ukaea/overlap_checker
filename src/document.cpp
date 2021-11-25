@@ -142,7 +142,7 @@ document::load_brep_file(const char* path)
 		std::exit(1);
 	}
 
-	LOG(DEBUG) << "expecting " << shape.NbChildren() << " solid shapes";
+	LOG(DEBUG) << "expecting " << shape.NbChildren() << " solid shapes\n";
 	solid_shapes.reserve(shape.NbChildren());
 
 	for (TopoDS_Iterator it(shape); it.More(); it.Next()) {
