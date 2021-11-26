@@ -6,6 +6,14 @@
 #include <vector>
 
 
+/* simple thread pool, threads are created in the constructor and joined in
+ * the destructor. you can submit() lambdas and they'll be executed
+ * asynchronously.
+ *
+ * note that this class isn't very user friendly, you probably want to use one
+ * of the helpers below to make sure these tasks get executed by some
+ * deterministic point
+ */
 class thread_pool {
 	std::vector<std::thread> workers;
 
@@ -23,6 +31,10 @@ public:
 	void submit(std::function<void(void)> task);
 };
 
+/* modelled after a "parallel for loop", you submit() jobs in a for loop,
+ * these are executed by the pool, and this code waits for all submitted jobs
+ * to execute during the destructor
+ */
 class parfor {
 	std::mutex mutex;
 	std::condition_variable cond;
@@ -59,6 +71,13 @@ public:
 	}
 };
 
+/* modelled after map_async from Python's multiprocessing library. you
+ * submit() jobs and these are executed by the pool, and this code allows you
+ * to get results from each job as soon as it completes.
+ *
+ * note that this is likely to be in a different order than they were
+ * submitted
+ */
 template<typename T>
 class asyncmap {
 	std::mutex mutex;
@@ -83,13 +102,15 @@ public:
 		}
 	}
 
-	void apply(thread_pool &pool, std::function<T(void)> fn) {
+	void submit(thread_pool &pool, std::function<T(void)> fn) {
 		pool.submit([this, fn]() {
 			auto result = fn();
 
 			std::unique_lock<std::mutex> mlock(mutex);
 			num_inflight -= 1;
 			results.emplace_back(result);
+			mlock.unlock();
+
 			cond.notify_one();
 		});
 

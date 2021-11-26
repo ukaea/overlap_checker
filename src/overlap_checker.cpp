@@ -238,7 +238,7 @@ main(int argc, char **argv)
 					continue;
 				}
 
-				map.apply(pool, [&state, hi, lo]() {
+				map.submit(pool, [&state, hi, lo]() {
 					return shape_classifier(state, hi, lo);
 				});
 				num_to_process += 1;
