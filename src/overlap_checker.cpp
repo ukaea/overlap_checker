@@ -1,4 +1,5 @@
 #include <cassert>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -195,7 +196,7 @@ main(int argc, char **argv)
 	LOG(DEBUG) << "launching " << num_parallel_jobs << " worker threads\n";
 	thread_pool pool(num_parallel_jobs);
 
-	LOG(DEBUG) << "calculating bounding boxes\n";
+	LOG(INFO) << "calculating " << doc.solid_shapes.size() << " bounding boxes\n";
 
 	std::vector<Bnd_OBB> bounding_boxes(doc.solid_shapes.size());
 	std::vector<double> volumes(doc.solid_shapes.size());
@@ -213,10 +214,9 @@ main(int argc, char **argv)
 		}
 	}
 
-	LOG(DEBUG) << "checking bounding boxes\n";
-
 	unsigned long
 		num_bbox_tests = 0,
+		num_to_process = 0,
 		num_processed = 0,
 		num_failed = 0,
 		num_touching = 0,
@@ -241,15 +241,26 @@ main(int argc, char **argv)
 				map.apply(pool, [&state, hi, lo]() {
 					return shape_classifier(state, hi, lo);
 				});
-				num_processed += 1;
+				num_to_process += 1;
 			}
 		}
 
-		LOG(INFO) << "checking for overlaps between " << num_processed << " pairs\n";
+		LOG(INFO) << "checking for overlaps between " << num_to_process << " pairs\n";
+
+		const std::chrono::seconds reporting_interval{5};
+		auto report_when = std::chrono::steady_clock::now() + reporting_interval;
 
 		while (!map.empty()) {
 			worker_output output = map.get();
 			num_processed += 1;
+
+			if (report_when < std::chrono::steady_clock::now()) {
+				LOG(INFO)
+					<< "processed " << num_processed << " pairs ("
+					<< (num_processed * 100) / num_to_process << "%)\n";
+
+				report_when += reporting_interval;
+			}
 
 			size_t hi = output.hi, lo = output.lo;
 
