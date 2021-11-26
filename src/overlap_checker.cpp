@@ -35,7 +35,7 @@ struct worker_output {
 };
 
 static worker_output
-shape_classifier(worker_state& state, size_t hi, size_t lo)
+shape_classifier(const worker_state& state, size_t hi, size_t lo)
 {
 	const auto &shape = state.doc.solid_shapes[hi];
 	const auto &tool = state.doc.solid_shapes[lo];
@@ -224,7 +224,7 @@ main(int argc, char **argv)
 		num_bad_overlaps = 0;
 
 	{
-		struct worker_state state{doc, imprint_tolerances};
+		const struct worker_state state{doc, imprint_tolerances};
 		asyncmap<worker_output> map;
 
 		for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
