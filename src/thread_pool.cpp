@@ -75,7 +75,7 @@ TEST_CASE("thread_pool") {
 		constexpr int N = 5;
 		// run a few jobs asynchronously
 		for (size_t i = 0; i < N; i++) {
-			map.apply(pool, [i]() {
+			map.submit(pool, [i]() {
 				return i;
 			});
 		}
