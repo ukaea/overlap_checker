@@ -4,10 +4,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <thread>
-#include <deque>
-#include <mutex>
-#include <condition_variable>
 
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
@@ -17,6 +13,7 @@
 
 #include "geometry.hpp"
 #include "utils.hpp"
+#include "thread_pool.hpp"
 
 
 // helper methods to allow fmt to display some OCCT values nicely
@@ -27,8 +24,9 @@ static std::ostream& operator<<(std::ostream& str, Bnd_OBB obb) {
 	return str;
 }
 
-struct worker_input {
-	size_t hi, lo;
+struct worker_state {
+	const document &doc;
+	std::vector<double> &fuzzy_values;
 };
 
 struct worker_output {
@@ -36,103 +34,44 @@ struct worker_output {
 	intersect_result result;
 };
 
-class worker_queue {
-	std::mutex mutex;
-	std::condition_variable cond;
-
-	std::deque<worker_input> input;
-	std::deque<worker_output> output;
-
-public:
-	size_t input_size() {
-		return input.size();
-	}
-
-	void add_work(const worker_input &work) {
-		input.push_back(work);
-	}
-
-	bool next_input(worker_input &work) {
-		std::unique_lock<std::mutex> mlock(mutex);
-
-		if (input.empty()) {
-			return false;
-		}
-
-		work = input.front();
-		input.pop_front();
-
-		return true;
-	}
-
-	void add_output(const worker_output &work) {
-		std::unique_lock<std::mutex> mlock(mutex);
-
-		output.push_back(work);
-		mlock.unlock();
-
-		cond.notify_one();
-	}
-
-	worker_output next_output() {
-		std::unique_lock<std::mutex> mlock(mutex);
-		while (output.empty()) {
-			cond.wait(mlock);
-		}
-		auto result = output.front();
-		output.pop_front();
-		return result;
-	}
-};
-
-static void
-shape_classifier(
-	const document &doc, worker_queue &queue, std::vector<double> &fuzzy_values)
+static worker_output
+shape_classifier(worker_state& state, size_t hi, size_t lo)
 {
-	LOG(DEBUG) << "worker thread starting\n";
+	const auto &shape = state.doc.solid_shapes[hi];
+	const auto &tool = state.doc.solid_shapes[lo];
 
-	const auto &shapes = doc.solid_shapes;
+	intersect_result result;
 
-	worker_input input;
-	worker_output output;
-
-	while (queue.next_input(input)) {
-		const auto &shape = shapes[output.hi = input.hi];
-		const auto &tool = shapes[output.lo = input.lo];
-
-		bool first = true;
-		for (const auto fuzzy_value : fuzzy_values) {
-			if (!first) {
-				LOG(INFO)
-					<< std::setw(5) << input.hi << '-' << std::left << input.lo << std::right
-					<< " imprint failed with "
-					<< '(' << output.result.num_filler_warnings << " filler and "
-					<< output.result.num_common_warnings << " common) "
-					<< "warnings, retrying with tolerance=" << fuzzy_value << '\n';
-			}
-
-			output.result = classify_solid_intersection(
-				shape, tool, fuzzy_value);
-
-			// try again with less fuzz
-			if (output.result.status != intersect_status::failed) {
-				break;
-			}
-		}
-
-		if (output.result.status == intersect_status::failed) {
-			LOG(WARNING)
-				<< std::setw(5) << input.hi << '-' << std::left << input.lo << std::right
+	bool first = true;
+	for (const auto fuzzy_value : state.fuzzy_values) {
+		if (!first) {
+			LOG(INFO)
+				<< std::setw(5) << hi << '-' << std::left << lo << std::right
 				<< " imprint failed with "
-				<< '(' << output.result.num_filler_warnings << " filler and "
-				<< output.result.num_common_warnings << " common) "
-				<< "warnings\n";
+				<< '(' << result.num_filler_warnings << " filler and "
+				<< result.num_common_warnings << " common) "
+				<< "warnings, retrying with tolerance=" << fuzzy_value << '\n';
 		}
 
-		queue.add_output(output);
+		result = classify_solid_intersection(
+			shape, tool, fuzzy_value);
+
+		// try again with less fuzz
+		if (result.status != intersect_status::failed) {
+			break;
+		}
 	}
 
-	LOG(DEBUG) << "worker thread exiting\n";
+	if (result.status == intersect_status::failed) {
+		LOG(WARNING)
+			<< std::setw(5) << hi << '-' << std::left << lo << std::right
+			<< " imprint failed with "
+			<< '(' << result.num_filler_warnings << " filler and "
+			<< result.num_common_warnings << " common) "
+			<< "warnings\n";
+	}
+
+	return {hi, lo, result};
 }
 
 
@@ -253,22 +192,29 @@ main(int argc, char **argv)
 	document doc;
 	doc.load_brep_file(path_in.c_str());
 
-	LOG(DEBUG) << "calculating bounding boxes\n";
-	std::vector<Bnd_OBB> bounding_boxes;
-	std::vector<double> volumes;
-	bounding_boxes.reserve(doc.solid_shapes.size());
-	volumes.reserve(doc.solid_shapes.size());
-	for (const auto &shape : doc.solid_shapes) {
-		Bnd_OBB obb;
-		BRepBndLib::AddOBB(shape, obb);
-		bounding_boxes.push_back(obb);
+	LOG(DEBUG) << "launching " << num_parallel_jobs << " worker threads\n";
+	thread_pool pool(num_parallel_jobs);
 
-		volumes.push_back(volume_of_shape(shape));
+	LOG(DEBUG) << "calculating bounding boxes\n";
+
+	std::vector<Bnd_OBB> bounding_boxes(doc.solid_shapes.size());
+	std::vector<double> volumes(doc.solid_shapes.size());
+
+	{
+		parfor work;
+		size_t i = 0;
+		for (const auto &shape : doc.solid_shapes) {
+			work.submit(pool, [&bounding_boxes, &volumes, i, &shape]() {
+				BRepBndLib::AddOBB(shape, bounding_boxes[i]);
+
+				volumes[i] = volume_of_shape(shape);
+			});
+			i += 1;
+		}
 	}
 
-	LOG(DEBUG) << "starting imprinting\n";
+	LOG(DEBUG) << "checking bounding boxes\n";
 
-	worker_queue queue;
 	unsigned long
 		num_bbox_tests = 0,
 		num_processed = 0,
@@ -277,37 +223,32 @@ main(int argc, char **argv)
 		num_overlaps = 0,
 		num_bad_overlaps = 0;
 
-	for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
-		for (size_t lo = 0; lo < hi; lo++) {
-			num_bbox_tests += 1;
-
-			// seems reasonable to assume majority of shapes aren't close to
-			// overlapping, so check with coarser limit first
-			if (are_bboxs_disjoint(
-					bounding_boxes[hi], bounding_boxes[lo], bbox_clearance)) {
-				continue;
-			}
-
-			worker_input work{hi, lo};
-			queue.add_work(work);
-		}
-	}
-
 	{
-		size_t
-			remain = queue.input_size();
+		struct worker_state state{doc, imprint_tolerances};
+		asyncmap<worker_output> map;
 
-		LOG(DEBUG) << "launching " << num_parallel_jobs << " worker threads\n";
+		for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
+			for (size_t lo = 0; lo < hi; lo++) {
+				num_bbox_tests += 1;
 
-		std::vector<std::thread> threads;
-		for (unsigned i = 0; i < num_parallel_jobs; i++) {
-			threads.emplace_back(shape_classifier, std::ref(doc), std::ref(queue), std::ref(imprint_tolerances));
+				// seems reasonable to assume majority of shapes aren't close to
+				// overlapping, so check with coarser limit first
+				if (are_bboxs_disjoint(
+						bounding_boxes[hi], bounding_boxes[lo], bbox_clearance)) {
+					continue;
+				}
+
+				map.apply(pool, [&state, hi, lo]() {
+					return shape_classifier(state, hi, lo);
+				});
+				num_processed += 1;
+			}
 		}
 
-		LOG(DEBUG) << "waiting for results from workers\n";
+		LOG(INFO) << "checking for overlaps between " << num_processed << " pairs\n";
 
-		while (remain--) {
-			worker_output output = queue.next_output();
+		while (!map.empty()) {
+			worker_output output = map.get();
 			num_processed += 1;
 
 			size_t hi = output.hi, lo = output.lo;
@@ -356,11 +297,6 @@ main(int argc, char **argv)
 
 			// flush any CSV output
 			std::cout << std::flush;
-		}
-
-		LOG(DEBUG) << "joining worker threads\n";
-		for (auto &thread : threads) {
-			thread.join();
 		}
 
 		LOG(INFO)
