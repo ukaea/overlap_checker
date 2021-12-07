@@ -21,6 +21,8 @@
 int
 main(int argc, char **argv)
 {
+	configure_aixlog();
+
 	std::string path_in, path_out;
 
 	{
