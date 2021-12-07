@@ -2,6 +2,10 @@
 
 set -euxo pipefail
 
+echo "$@"
+
+pwd
+
 env
 
 ls -l ..

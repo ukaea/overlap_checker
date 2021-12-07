@@ -9,7 +9,7 @@ jobs:
     - name: Install system packages
       run: |
         apt-get -y update
-        apt-get -y install git g++ cmake libocct-foundation-dev libocct-data-exchange-dev
+        apt-get -y install git git-lfs g++ cmake libocct-foundation-dev libocct-data-exchange-dev
     - uses: actions/checkout@v2
       with:
         lfs: true
@@ -22,4 +22,3 @@ jobs:
     - name: Test
       run: |
         env -C build ctest -V
-
