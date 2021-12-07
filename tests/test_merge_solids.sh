@@ -2,6 +2,10 @@
 
 set -euxo pipefail
 
+env
+
+ls -l ..
+
 # assume we're running in the build directory which is a direct
 # descendant of the source
 
