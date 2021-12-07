@@ -29,7 +29,7 @@
 #include <stdexcept>
 #include <optional>
 
-#include <spdlog/spdlog.h>
+#include <aixlog.hpp>
 
 #include <Standard.hxx>
 #include <Standard_Macro.hxx>
@@ -80,13 +80,13 @@
 
 #include "geom_gluer.hxx"
 
-
-template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
-	// parse is inherited from formatter<string_view>.
-	template <typename FormatContext>
-	auto format(TopAbs_ShapeEnum c, FormatContext& ctx) {
-		string_view name = "unknown";
-		switch (c) {
+// unnamed namespace for internal linkage
+namespace {
+	std::ostream&
+	operator<<(std::ostream& str, TopAbs_ShapeEnum type)
+	{
+		const char* name = "unknown";
+		switch(type) {
 		case TopAbs_COMPOUND: name = "COMPOUND"; break;
 		case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
 		case TopAbs_SOLID: name = "SOLID"; break;
@@ -97,13 +97,9 @@ template <> struct fmt::formatter<TopAbs_ShapeEnum>: formatter<string_view> {
 		case TopAbs_VERTEX: name = "VERTEX"; break;
 		case TopAbs_SHAPE: name = "SHAPE"; break;
 		}
-		return formatter<string_view>::format(name, ctx);
+		return str << name;
 	}
-};
 
-
-// unnamed namespace for internal linkage
-namespace {
 	bool isCompoundShape(const TopoDS_Shape& shape) {
 		switch (shape.ShapeType()) {
 		case TopAbs_COMPOUND:
@@ -585,13 +581,13 @@ namespace {
 
 			// perform detection
 			DetectVertices();
-			spdlog::info("DetectVertices done");
+			LOG(TRACE) << "DetectVertices done\n";
 
 			DetectShapes(TopAbs_EDGE);
-			spdlog::info("DetectShapes(EDGE) done");
+			LOG(TRACE) << "DetectShapes(EDGE) done\n";
 
 			DetectShapes(TopAbs_FACE);
-			spdlog::info("DetectShapes(FACE) done");
+			LOG(TRACE) << "DetectShapes(FACE) done\n";
 		}
 
 		const TopTools_DataMapOfShapeListOfShape& Images() { return myImages; }
@@ -743,11 +739,11 @@ namespace {
 				coincident_shapes.Add(aPKF, aLSDF);
 			}
 		}
-		spdlog::info("before RefineCoincidentShapes!");
+		LOG(TRACE) << "before RefineCoincidentShapes!\n";
 		// check geometric coincidence, note this ~50% of total execution time for
 		// me
 		merger.RefineCoincidentShapes(coincident_shapes);
-		spdlog::info("after RefineCoincidentShapes!");
+		LOG(TRACE) << "after RefineCoincidentShapes!\n";
 		//
 		// Images/Origins
 		for (CoincidentShapeList::Iterator it{coincident_shapes}; it.More(); it.Next()) {
@@ -852,7 +848,7 @@ namespace {
 		myOriginsToWork.Clear();
 
 		if (!myImagesToWork.Extent()) {
-			spdlog::warn("no shapes to glue detected");
+			LOG(WARNING) << "no shapes to glue detected\n";
 			return myArgument;
 		}
 
@@ -864,27 +860,27 @@ namespace {
 			}
 		}
 
-		spdlog::info("images and work assembled");
+		LOG(TRACE) << "images and work assembled";
 		FillVertices();
-		spdlog::info("FillVertices done");
+		LOG(TRACE) << "FillVertices done\n";
 		FillBRepShapes(TopAbs_EDGE);
-		spdlog::info("FillBRepShapes(EDGE) done");
+		LOG(TRACE) << "FillBRepShapes(EDGE) done\n";
 		FillContainers(TopAbs_WIRE);
-		spdlog::info("FillContainers(WIRE) done");
+		LOG(TRACE) << "FillContainers(WIRE) done\n";
 		FillBRepShapes(TopAbs_FACE);
-		spdlog::info("FillBRepShapes(FACE) done");
+		LOG(TRACE) << "FillBRepShapes(FACE) done\n";
 		FillContainers(TopAbs_SHELL);
-		spdlog::info("FillContainers(SHELL) done");
+		LOG(TRACE) << "FillContainers(SHELL) done\n";
 		FillContainers(TopAbs_SOLID);
-		spdlog::info("FillContainers(SOLID) done");
+		LOG(TRACE) << "FillContainers(SOLID) done\n";
 		FillContainers(TopAbs_COMPSOLID);
-		spdlog::info("FillContainers(COMPSOLID) done");
+		LOG(TRACE) << "FillContainers(COMPSOLID) done\n";
 		FillCompounds();
-		spdlog::info("FillCompounds done");
+		LOG(TRACE) << "FillCompounds done\n";
 		auto result = BuildResult();
-		spdlog::info("BuildResult done");
+		LOG(TRACE) << "BuildResult done\n";
 		BRepLib::SameParameter(result, tolerance, Standard_True);
-		spdlog::info("SameParameter done");
+		LOG(TRACE) << "SameParameter done\n";
 		return result;
 	}
 
@@ -1164,7 +1160,7 @@ salome_glue_shape(const TopoDS_Shape &shape, Standard_Real tolerance)
 		geomgluer2 gluer(shape);
 		return gluer.Perform(tolerance);
 	} catch (std::exception &err) {
-		spdlog::critical("failed to glue shapes: {}", err.what());
+		LOG(FATAL) << "failed to glue shapes: " << err.what() << '\n';
 		std::exit(1);
 	}
 }

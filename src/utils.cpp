@@ -1,61 +1,93 @@
-#include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <cassert>
+
+#include <algorithm>
+#include <iomanip>
+#include <limits>
 #include <string>
 
-#ifdef INCLUDE_DOCTESTS
-#include <doctest/doctest.h>
+#ifdef INCLUDE_TESTS
+#include <catch2/catch_test_macros.hpp>
 #endif
 
-#include <spdlog/spdlog.h>
-#include <spdlog/cfg/env.h>
-#include <spdlog/stopwatch.h>
-#include <spdlog/pattern_formatter.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-
+#include <aixlog.hpp>
+#include <cxx_argp_parser.h>
 
 #include "utils.hpp"
 
+static auto aixlog_severity = AixLog::Severity::info;
+static std::shared_ptr<AixLog::Sink> aixlog_sink;
 
+#define OPT_USAGE -3
 
-// code to allow spdlog to print out elapsed time since process started
-class time_elapsed_formatter_flag : public spdlog::custom_flag_formatter
+tool_argp_parser::tool_argp_parser(int expected_args) : cxx_argp::parser(expected_args)
 {
-	using clock = std::chrono::steady_clock;
-	using timepoint = std::chrono::time_point<clock>;
+	add_flags(ARGP_NO_HELP);
+	help_via_argp_flags = false;
 
-	timepoint reference;
+	add_option(
+		{"verbose", 'v', nullptr, 0, "Increase verbosity of output, can be repeated"},
+		[](int, const char *, struct argp_state*) {
+			// go through severity levels:  Info => Debug => Trace
+			if (aixlog_severity > AixLog::Severity::debug){
+				if (aixlog_severity > AixLog::Severity::info) {
+					aixlog_severity = AixLog::Severity::info;
+				} else {
+					aixlog_severity = AixLog::Severity::debug;
+				}
+			} else if (aixlog_severity > AixLog::Severity::trace) {
+				aixlog_severity = AixLog::Severity::trace;
+			}
+			aixlog_sink->filter.add_filter(aixlog_severity);
+			return 0;
+		});
 
-public:
-	time_elapsed_formatter_flag() : reference{clock::now()} {}
-	time_elapsed_formatter_flag(timepoint ref) : reference{ref} {}
+	add_option(
+		{"quiet", 'q', nullptr, 0, "Decrease verbosity of output"},
+		[](int, const char *, struct argp_state*) {
+			aixlog_sink->filter.add_filter(
+				aixlog_severity = AixLog::Severity::warning);
+			return 0;
+		});
 
-	void format(const spdlog::details::log_msg &, const std::tm &, spdlog::memory_buf_t &dest) override {
-		auto elapsed = std::chrono::duration<double>(clock::now() - reference);
-		auto txt = fmt::format("{:.3f}", elapsed.count());
-		dest.append(txt.data(), txt.data() + txt.size());
-	}
+	add_option(
+		{"help", 'h', nullptr, 0, "Give this help list"},
+		[](int, const char *, struct argp_state* state) {
+			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
+			std::exit(0);
+			return 0;
+		});
 
-	std::unique_ptr<custom_flag_formatter> clone() const override {
-		return spdlog::details::make_unique<time_elapsed_formatter_flag>(reference);
-	}
-};
+	add_option(
+		{"usage", OPT_USAGE, nullptr, 0, "Give a short usage message"},
+		[](int, const char *, struct argp_state* state) {
+			argp_state_help(state, stderr, ARGP_HELP_STD_USAGE);
+			std::exit(0);
+			return 0;
+		});
+}
 
-void configure_spdlog()
+
+void configure_aixlog()
 {
-	// pull config from environment variables, e.g. `export SPDLOG_LEVEL=info,mylogger=trace`
-	spdlog::cfg::load_env_levels();
+	using timepoint = AixLog::Timestamp::time_point_sys_clock;
 
-	auto formatter = std::make_unique<spdlog::pattern_formatter>();
-	formatter->add_flag<time_elapsed_formatter_flag>('*');
-	formatter->set_pattern("[%*] [%^%l%$] %v");
-	spdlog::set_formatter(std::move(formatter));
+	timepoint reference = timepoint::clock::now();
 
-	// Replace the default logger with a (color, single-threaded) stderr
-	// logger with name "" (but first replace it with an arbitrarily-named
-	// logger to prevent a name clash)
-	spdlog::set_default_logger(spdlog::stderr_color_mt("some_arbitrary_name"));
-	spdlog::set_default_logger(spdlog::stderr_color_mt(""));
+	auto callback = [reference](const AixLog::Metadata& metadata, const std::string& message) {
+		if (metadata.timestamp) {
+			auto elapsed = std::chrono::duration<double>(metadata.timestamp.time_point - reference);
+			std::cerr << std::fixed << std::setprecision(3) << elapsed.count();
+		}
+		std::cerr << " [" << AixLog::to_string(metadata.severity) << "] ";
+		if (metadata.tag) {
+			std::cerr << '(' << metadata.tag.text << ") ";
+		}
+		std::cerr << message << '\n';
+	};
+
+	aixlog_sink = AixLog::Log::init<AixLog::SinkCallback>(aixlog_severity, callback);
 }
 
 
@@ -75,17 +107,17 @@ are_vals_close(const double a, const double b, const double drel, const double d
 	return std::abs(b - a) < (drel * mag + dabs);
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
-TEST_SUITE("are_vals_close") {
-	TEST_CASE("identical values") {
+#ifdef INCLUDE_TESTS
+TEST_CASE("are_vals_close") {
+	SECTION("identical values") {
 		CHECK(are_vals_close(0, 0));
 		CHECK(are_vals_close(1, 1));
 	}
-	TEST_CASE("close values") {
+	SECTION("close values") {
 		CHECK(are_vals_close(0, 1e-15));
 		CHECK(are_vals_close(1, 1+1e-15));
 	}
-	TEST_CASE("far values") {
+	SECTION("far values") {
 		CHECK_FALSE(are_vals_close(0, 1));
 		CHECK_FALSE(are_vals_close(1, 0));
 		CHECK_FALSE(are_vals_close(0, 1e-10));
@@ -131,51 +163,51 @@ bool size_t_of_string(const char *s, size_t &i, int base)
 	return true;
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
-TEST_SUITE("int_of_string") {
-	TEST_CASE("success") {
+#ifdef INCLUDE_TESTS
+TEST_CASE("int_of_string") {
+	SECTION("success") {
 		int val = -1;
 		CHECK(int_of_string("0", val));
-		CHECK_EQ(val, 0);
+		CHECK(val == 0);
 		CHECK(int_of_string("1", val));
-		CHECK_EQ(val, 1);
+		CHECK(val == 1);
 		CHECK(int_of_string("-1", val));
-		CHECK_EQ(val, -1);
+		CHECK(val == -1);
 		CHECK(int_of_string("0x10", val));
-		CHECK_EQ(val, 16);
+		CHECK(val == 16);
 		CHECK(int_of_string("ff", val, 16));
-		CHECK_EQ(val, 255);
+		CHECK(val == 255);
 	}
-	TEST_CASE("failure") {
+	SECTION("failure") {
 		int val = -1;
 		CHECK_FALSE(int_of_string("", val));
-		CHECK_EQ(val, -1);
+		CHECK(val == -1);
 		CHECK_FALSE(int_of_string("zzz", val));
-		CHECK_EQ(val, -1);
+		CHECK(val == -1);
 	}
 }
-TEST_SUITE("size_t_of_string") {
-	TEST_CASE("success") {
+TEST_CASE("size_t_of_string") {
+	SECTION("success") {
 		size_t val = 1;
 		CHECK(size_t_of_string("0", val));
-		CHECK_EQ(val, 0);
+		CHECK(val == 0);
 		CHECK(size_t_of_string("1", val));
-		CHECK_EQ(val, 1);
+		CHECK(val == 1);
 		CHECK(size_t_of_string("0x10", val));
-		CHECK_EQ(val, 16);
+		CHECK(val == 16);
 		CHECK(size_t_of_string("ff", val, 16));
-		CHECK_EQ(val, 255);
+		CHECK(val == 255);
 	}
-	TEST_CASE("failure") {
+	SECTION("failure") {
 		size_t val = 7;
 		CHECK_FALSE(size_t_of_string("", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 		CHECK_FALSE(size_t_of_string("-1", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 		CHECK_FALSE(size_t_of_string("18446744073709551616", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 		CHECK_FALSE(size_t_of_string("zzz", val));
-		CHECK_EQ(val, 7);
+		CHECK(val == 7);
 	}
 }
 #endif
@@ -233,7 +265,7 @@ parse_csv_row(const std::string &row)
 	return fields;
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
+#ifdef INCLUDE_TESTS
 template<typename T> bool
 vectors_eq(const std::vector<T> &a, const std::vector<T> &b)
 {
@@ -241,15 +273,15 @@ vectors_eq(const std::vector<T> &a, const std::vector<T> &b)
 		std::equal(a.begin(), a.end(), b.begin());
 }
 
-TEST_SUITE("parse_csv_row") {
-	TEST_CASE("validate vectors_eq") {
+TEST_CASE("parse_csv_row") {
+	SECTION("validate vectors_eq") {
 		CHECK(vectors_eq<int>({}, {}));
 		CHECK(vectors_eq<int>({0}, {0}));
 		CHECK_FALSE(vectors_eq<int>({0}, {}));
 		CHECK_FALSE(vectors_eq<int>({}, {1}));
 		CHECK_FALSE(vectors_eq<int>({0}, {1}));
 	}
-	TEST_CASE("simple cases") {
+	SECTION("simple cases") {
 		CHECK(vectors_eq(parse_csv_row(""), {""}));
 		CHECK(vectors_eq(parse_csv_row("a"), {"a"}));
 		CHECK(vectors_eq(parse_csv_row(","), {"",""}));
@@ -257,7 +289,7 @@ TEST_SUITE("parse_csv_row") {
 		CHECK(vectors_eq(parse_csv_row("a, b"), {"a"," b"}));
 		CHECK(vectors_eq(parse_csv_row("a ,b"), {"a ","b"}));
 	}
-	TEST_CASE("double-quote escapes") {
+	SECTION("double-quote escapes") {
 		CHECK(vectors_eq(parse_csv_row("\"\""), {""}));
 		CHECK(vectors_eq(parse_csv_row("\",\""), {","}));
 		CHECK(vectors_eq(parse_csv_row("\"\"\"\""), {"\""}));

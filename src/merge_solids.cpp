@@ -1,11 +1,8 @@
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 
-#include <spdlog/spdlog.h>
-
-#include <CLI/App.hpp>
-#include <CLI/Formatter.hpp>
-#include <CLI/Config.hpp>
+#include <aixlog.hpp>
 
 #include <BRepTools.hxx>
 
@@ -17,26 +14,30 @@
 
 #include "salome/geom_gluer.hxx"
 
-#include "document.hpp"
+#include "geometry.hpp"
 #include "utils.hpp"
 
 
 int
 main(int argc, char **argv)
 {
-	configure_spdlog();
-
 	std::string path_in, path_out;
 
 	{
-		CLI::App app{"Merge surfaces across solids, identical sub-geometry will become shared."};
-		app.add_option("input", path_in, "Path of the input file")
-			->required()
-			->option_text("input.brep");
-		app.add_option("output", path_out, "Path of the output file")
-			->required()
-			->option_text("output.brep");
-		CLI11_PARSE(app, argc, argv);
+		const char * doc = (
+			"Merge surfaces across solids, identical sub-geometry will become shared.");
+		const char * usage = "input.brep output.brep";
+
+		tool_argp_parser argp(2);
+
+		if (!argp.parse(argc, argv, usage, doc)) {
+			return 1;
+		}
+
+		const auto &args = argp.arguments();
+		assert(args.size() == 2);
+		path_in = args[0];
+		path_out = args[1];
 	}
 
 	document inp;
@@ -59,12 +60,13 @@ main(int argc, char **argv)
 		}
 	}
 
-	spdlog::debug("checking merged shapes are similar to input");
+	LOG(DEBUG) << "checking merged shapes are similar to input\n";
 
 	if (inp.solid_shapes.size() != out.solid_shapes.size()) {
-		spdlog::error(
-			"number of shapes changed after merge, {} => {}",
-			inp.solid_shapes.size(), out.solid_shapes.size());
+		LOG(ERROR)
+			<< "number of shapes changed after merge, "
+			<< inp.solid_shapes.size() << " => "
+			<< out.solid_shapes.size() << '\n';
 		std::exit(1);
 	}
 
@@ -76,9 +78,9 @@ main(int argc, char **argv)
 			mn = std::min(v1, v2) * 0.001;
 
 		if (std::fabs(v1 - v2) > mn) {
-			spdlog::error(
-				"number of shapes changed after merge, {} => {}",
-				inp.solid_shapes.size(), out.solid_shapes.size());
+			LOG(WARNING)
+				<< "non-trivial change in volume during merge, "
+				<< v1 << " => " << v2 << '\n';
 			num_changed += 1;
 		}
 	}
