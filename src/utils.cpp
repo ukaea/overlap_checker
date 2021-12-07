@@ -265,7 +265,7 @@ parse_csv_row(const std::string &row)
 	return fields;
 }
 
-#ifdef DOCTEST_LIBRARY_INCLUDED
+#ifdef INCLUDE_TESTS
 template<typename T> bool
 vectors_eq(const std::vector<T> &a, const std::vector<T> &b)
 {
@@ -273,15 +273,15 @@ vectors_eq(const std::vector<T> &a, const std::vector<T> &b)
 		std::equal(a.begin(), a.end(), b.begin());
 }
 
-TEST_SUITE("parse_csv_row") {
-	TEST_CASE("validate vectors_eq") {
+TEST_CASE("parse_csv_row") {
+	SECTION("validate vectors_eq") {
 		CHECK(vectors_eq<int>({}, {}));
 		CHECK(vectors_eq<int>({0}, {0}));
 		CHECK_FALSE(vectors_eq<int>({0}, {}));
 		CHECK_FALSE(vectors_eq<int>({}, {1}));
 		CHECK_FALSE(vectors_eq<int>({0}, {1}));
 	}
-	TEST_CASE("simple cases") {
+	SECTION("simple cases") {
 		CHECK(vectors_eq(parse_csv_row(""), {""}));
 		CHECK(vectors_eq(parse_csv_row("a"), {"a"}));
 		CHECK(vectors_eq(parse_csv_row(","), {"",""}));
@@ -289,7 +289,7 @@ TEST_SUITE("parse_csv_row") {
 		CHECK(vectors_eq(parse_csv_row("a, b"), {"a"," b"}));
 		CHECK(vectors_eq(parse_csv_row("a ,b"), {"a ","b"}));
 	}
-	TEST_CASE("double-quote escapes") {
+	SECTION("double-quote escapes") {
 		CHECK(vectors_eq(parse_csv_row("\"\""), {""}));
 		CHECK(vectors_eq(parse_csv_row("\",\""), {","}));
 		CHECK(vectors_eq(parse_csv_row("\"\"\"\""), {"\""}));
