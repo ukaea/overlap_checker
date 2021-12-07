@@ -20,4 +20,5 @@ jobs:
         cmake --build build
     - name: Test
       run: |
-        env -C build ctest
+        env -C build ctest -V
+
