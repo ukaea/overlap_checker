@@ -28,4 +28,8 @@ if(BUILD_TESTING)
   target_link_libraries(test_runner Catch2WithMain)
 
   add_test(NAME unit-tests COMMAND test_runner)
+
+  add_test(NAME shape-merge
+    COMMAND bash ${PROJECT_SOURCE_DIR}/tests/test_merge_solids.sh
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
 endif()
