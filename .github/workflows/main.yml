@@ -12,6 +12,7 @@ jobs:
         apt-get -y install git g++ cmake libocct-foundation-dev libocct-data-exchange-dev
     - uses: actions/checkout@v2
       with:
+        lfs: true
         submodules: recursive
     - name: Build
       run: |
