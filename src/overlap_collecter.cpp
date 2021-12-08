@@ -27,7 +27,7 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 			return 1;
 		}
 
-		int first, second;
+		ssize_t first, second;
 		if ((first = doc.lookup_solid(fields[0])) < 0) {
 			LOG(FATAL) << "first value (" << fields[0] << ") is not a valid shape index\n";
 			return 1;
@@ -45,7 +45,7 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 
 		boolean_op op{
 			BOPAlgo_COMMON,
-			doc.solid_shapes[first], doc.solid_shapes[second]};
+			doc.solid_shapes[(size_t)first], doc.solid_shapes[(size_t)second]};
 		op.Build();
 		if(!op.IsDone()) {
 			LOG(FATAL) << "unable determine solid common to shapes\n";

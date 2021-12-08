@@ -9,6 +9,8 @@ link_libraries(
   TKGeomAlgo)
 
 add_library(shared OBJECT utils.cpp geometry.cpp thread_pool.cpp)
+# supported by GCC and Clang
+add_compile_options(-Wall -Wextra -Wconversion)
 
 link_libraries(pthread)
 

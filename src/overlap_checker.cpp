@@ -17,14 +17,6 @@
 #include "thread_pool.hpp"
 
 
-// helper methods to allow fmt to display some OCCT values nicely
-static std::ostream& operator<<(std::ostream& str, Bnd_OBB obb) {
-	str << '{';
-	obb.DumpJson(str);
-	str << '}';
-	return str;
-}
-
 struct worker_state {
 	const document &doc;
 	std::vector<double> &fuzzy_values;
@@ -137,13 +129,13 @@ main(int argc, char **argv)
 
 		tool_argp_parser argp(1);
 		argp.add_option(
-			{"jobs", 'j', "N", 0, help_num_par_jobs.c_str()}, num_parallel_jobs);
+			{"jobs", 'j', "N", 0, help_num_par_jobs.c_str(), 0}, num_parallel_jobs);
 		argp.add_option(
-			{"bbox-clearance", 1024, "C", 0, help_bbox_cl.c_str()}, bbox_clearance);
+			{"bbox-clearance", 1024, "C", 0, help_bbox_cl.c_str(), 0}, bbox_clearance);
 		argp.add_option(
-			{"imprint-tolerance", 1025, "T", 0, help_imp_tol.c_str()}, imprint_tolerances);
+			{"imprint-tolerance", 1025, "T", 0, help_imp_tol.c_str(), 0}, imprint_tolerances);
 		argp.add_option(
-			{"max-common-volume-ratio", 1026, "R", 0, help_max_common.c_str()}, max_common_volume_ratio);
+			{"max-common-volume-ratio", 1026, "R", 0, help_max_common.c_str(), 0}, max_common_volume_ratio);
 
 		if (!argp.parse(argc, argv, usage, doc)) {
 			return 1;

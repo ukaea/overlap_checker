@@ -7,7 +7,7 @@
 
 class tool_argp_parser : public cxx_argp::parser {
 public:
-	tool_argp_parser(int expected_args = 0);
+	tool_argp_parser(size_t expected_args = 0);
 };
 
 

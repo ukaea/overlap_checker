@@ -17,7 +17,7 @@ jobs:
     - name: Build
       run: |
         git submodule update
-        cmake build . -B build
+        cmake build . -B build -DWERROR=ON
         cmake --build build
     - name: Test
       run: |

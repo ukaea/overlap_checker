@@ -85,7 +85,7 @@ namespace {
 	std::ostream&
 	operator<<(std::ostream& str, TopAbs_ShapeEnum type)
 	{
-		const char* name = "unknown";
+		const char* name;
 		switch(type) {
 		case TopAbs_COMPOUND: name = "COMPOUND"; break;
 		case TopAbs_COMPSOLID: name = "COMPSOLID"; break;
@@ -96,6 +96,8 @@ namespace {
 		case TopAbs_EDGE: name = "EDGE"; break;
 		case TopAbs_VERTEX: name = "VERTEX"; break;
 		case TopAbs_SHAPE: name = "SHAPE"; break;
+		default:
+			return str << "[UNKNOWN " << type << ']';
 		}
 		return str << name;
 	}
@@ -203,13 +205,13 @@ namespace {
 
 		MultiShapeKey(const TopoDS_Shape& shape) : key{1} {
 			key.Add(shape);
-			hashsum = shape.HashCode(INT_MAX);
+			hashsum = (unsigned)shape.HashCode(INT_MAX);
 		}
 
 		MultiShapeKey(const TopTools_ListOfShape& shapes) : key(shapes.Extent()), hashsum{0} {
 			for (const auto &shape : shapes) {
 				key.Add(shape);
-				hashsum += shape.HashCode(INT_MAX);
+				hashsum += (unsigned)shape.HashCode(INT_MAX);
 			}
 		}
 
@@ -267,7 +269,8 @@ namespace {
 		}
 			// must be an EDGE or FACE at the moment
 		default:
-			throw std::runtime_error("shape is neither an EDGE nor FACDE");
+			LOG(ERROR) << "PointOnShape passed: " << shape.ShapeType() << '\n';
+			throw std::runtime_error("shape is neither an EDGE nor FACE");
 		}
 	}
 

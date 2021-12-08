@@ -27,7 +27,7 @@ imprint(document &doc)
 			return 1;
 		}
 
-		int first, second;
+		ssize_t first, second;
 		if ((first = doc.lookup_solid(fields[0])) < 0) {
 			LOG(FATAL) << "first value (" << fields[0] << ") is not a valid shape index\n";
 			return 1;
@@ -42,7 +42,7 @@ imprint(document &doc)
 		hi_lo << std::setw(5) << first << '-' << std::left << second << std::right;
 
 		const auto res = perform_solid_imprinting(
-			doc.solid_shapes[first], doc.solid_shapes[second], 0.01);
+			doc.solid_shapes[(size_t)first], doc.solid_shapes[(size_t)second], 0.01);
 		switch(res.status) {
 		case imprint_status::failed:
 			LOG(ERROR) << hi_lo.str() << " failed to imprint\n";
@@ -66,8 +66,8 @@ imprint(document &doc)
 				<< "was merged into " << second << '\n';
 			break;
 		}
-		doc.solid_shapes[first] = res.shape;
-		doc.solid_shapes[second] = res.tool;
+		doc.solid_shapes[(size_t)first] = res.shape;
+		doc.solid_shapes[(size_t)second] = res.tool;
 	}
 
 	if (status != input_status::end_of_file) {

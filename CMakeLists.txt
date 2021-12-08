@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD 17)
 include(CheckSymbolExists)
 include(CTest)
 
+option(WERROR "Enable -Werror compile flag" OFF)
+if(WERROR)
+  add_compile_options(-Werror)
+endif()
+
 check_symbol_exists(argp_parse "argp.h" HAVE_ARGP)
 if(NOT (HAVE_ARGP))
   message(SEND_ERROR "GNU argp is required for command line parsing")
