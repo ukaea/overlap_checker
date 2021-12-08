@@ -8,11 +8,13 @@ link_libraries(
   TKXSBase TKXDESTEP TKShHealing
   TKGeomAlgo)
 
-add_library(shared OBJECT utils.cpp geometry.cpp thread_pool.cpp)
 # supported by GCC and Clang
 add_compile_options(-Wall -Wextra -Wconversion)
 
+link_libraries(coverage_config)
 link_libraries(pthread)
+
+add_library(shared OBJECT utils.cpp geometry.cpp thread_pool.cpp)
 
 add_executable(step_to_brep step_to_brep.cpp $<TARGET_OBJECTS:shared>)
 

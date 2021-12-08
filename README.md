@@ -246,3 +246,32 @@ note that numbering is zero based.
 
 [brep_format]: https://dev.opencascade.org/doc/occt-6.7.0/overview/html/occt_brep_format.html
 [occt_topological_types]: https://dev.opencascade.org/doc/overview/html/occt_user_guides__modeling_data.html#occt_modat_5_2_1
+
+
+# Coverage
+
+Currently a few commands I found useful to run:
+
+```shell
+# configure with coverage enabled
+env CXX=clang++ cmake build . -B build \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCODE_COVERAGE=ON
+
+cd build
+
+# run program
+./merge_solids ../data/paramak_reactor.brep out.brep
+
+# convert data into a format usable by llvm-cov
+llvm-profdata merge -o testcov.profdata default.profraw
+
+# generate html coverage report
+llvm-cov show -output-dir=report -format=html ./merge_solids -instr-profile=testcov.profdata
+```
+
+can use `LLVM_PROFILE_FILE=paramak_reactor-merge.profraw` to output
+raw profile to another file. see [cov1][1] and [cov2][2] for more
+details
+
+[cov1]: https://alastairs-place.net/blog/2016/05/20/code-coverage-from-the-command-line-with-clang/
+[cov2]: https://clang.llvm.org/docs/SourceBasedCodeCoverage.html

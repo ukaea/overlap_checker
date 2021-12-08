@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
 
 project(overlap_checker LANGUAGES CXX)
 
@@ -6,6 +6,22 @@ set(CMAKE_CXX_STANDARD 17)
 
 include(CheckSymbolExists)
 include(CTest)
+
+# Code Coverage Configuration
+add_library(coverage_config INTERFACE)
+
+option(CODE_COVERAGE "Enable coverage reporting" OFF)
+if(CODE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  # Add required flags (GCC & LLVM/Clang)
+  target_compile_options(coverage_config INTERFACE
+    -g -O0        # debug, no optimization
+    -fprofile-instr-generate -fcoverage-mapping
+    )
+  target_link_options(coverage_config INTERFACE
+    -fprofile-instr-generate -fcoverage-mapping)
+else(CODE_COVERAGE)
+  message(SEND_ERROR "Clang is required for coverage at the moment")
+endif()
 
 option(WERROR "Enable -Werror compile flag" OFF)
 if(WERROR)
