@@ -19,7 +19,7 @@ if(CODE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     )
   target_link_options(coverage_config INTERFACE
     -fprofile-instr-generate -fcoverage-mapping)
-else(CODE_COVERAGE)
+elseif(CODE_COVERAGE)
   message(SEND_ERROR "Clang is required for coverage at the moment")
 endif()
 
@@ -29,7 +29,7 @@ if(WERROR)
 endif()
 
 check_symbol_exists(argp_parse "argp.h" HAVE_ARGP)
-if(NOT (HAVE_ARGP))
+if(NOT HAVE_ARGP)
   message(SEND_ERROR "GNU argp is required for command line parsing")
 endif()
 
