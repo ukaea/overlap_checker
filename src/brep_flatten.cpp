@@ -1,50 +1,53 @@
-#include <spdlog/spdlog.h>
+#include <cassert>
 
-#include <CLI/App.hpp>
-#include <CLI/Formatter.hpp>
-#include <CLI/Config.hpp>
+#include <aixlog.hpp>
 
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
 
 #include <TopExp_Explorer.hxx>
 
-#include "document.hpp"
+#include "geometry.hpp"
 #include "utils.hpp"
 
 
 int
 main(int argc, char **argv)
 {
-	configure_spdlog();
+	configure_aixlog();
 
 	std::string path_in, path_out;
 
 	{
-		CLI::App app{"Flatten contents of BREP file, producing a file usable by other tools."};
-		app.add_option("input", path_in, "Path of the input file")
-			->required()
-			->option_text("input.brep");
-		app.add_option("output", path_out, "Path of the output file")
-			->required()
-			->option_text("output.brep");
-		CLI11_PARSE(app, argc, argv);
+		const char *doc = "Flatten contents of BREP file, producing a file usable by other tools.";
+		const char *usage = "input.step output.brep";
+
+		tool_argp_parser argp(2);
+
+		if (!argp.parse(argc, argv, usage, doc)) {
+			return 1;
+		}
+
+		const auto &args = argp.arguments();
+		assert(args.size() == 2);
+		path_in = args[0];
+		path_out = args[1];
 	}
 
 	TopoDS_Shape shape;
 	if (!BRepTools::Read(shape, path_in.c_str(), BRep_Builder{})) {
-		spdlog::critical("failed to load brep file");
+		LOG(FATAL) << "failed to load brep file\n";
 		std::exit(1);
 	}
 
-	spdlog::debug("read brep file {}", path_in);
+	LOG(DEBUG) << "read brep file " << path_in << '\n';
 
 	document doc;
 	for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
 		doc.solid_shapes.emplace_back(ex.Current());
 	}
 
-	spdlog::info("found {} solids", doc.solid_shapes.size());
+	LOG(INFO) << "found " << doc.solid_shapes.size() << " solids\n";
 
 	doc.write_brep_file(path_out.c_str());
 

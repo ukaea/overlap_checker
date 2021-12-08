@@ -18,6 +18,8 @@ add_library(shared OBJECT utils.cpp geometry.cpp thread_pool.cpp)
 
 add_executable(step_to_brep step_to_brep.cpp $<TARGET_OBJECTS:shared>)
 
+add_executable(brep_flatten brep_flatten.cpp $<TARGET_OBJECTS:shared>)
+
 add_executable(overlap_checker overlap_checker.cpp $<TARGET_OBJECTS:shared>)
 
 add_executable(overlap_collecter overlap_collecter.cpp $<TARGET_OBJECTS:shared>)
