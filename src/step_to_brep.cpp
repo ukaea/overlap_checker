@@ -170,14 +170,15 @@ class collector {
 
 			doc.solid_shapes.emplace_back(ex.Current());
 
-			std::streamsize ss = std::cout.precision();
+			const auto ss = std::cout.precision(1);
 			std::cout
 				<< label_num << ','
 				<< label_name << ','
-				<< std::setprecision(1) << volume << std::setprecision((int)ss) << ','
+				<< volume << ','
 				<< color << ','
 				<< material_name << ','
 				<< material_density << '\n';
+			std::cout.precision(ss);
 		}
 	}
 

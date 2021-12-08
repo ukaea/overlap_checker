@@ -130,21 +130,20 @@ namespace {
 			gp_Pnt midpoint{0.5 * (center.XYZ() + rhs.center.XYZ())};
 
 			radius = midpoint.Distance(center)
-				+ std::max(radius + gap, rhs.radius + rhs.gap)
-				- gap;
+				+ std::max(radius, rhs.radius + rhs.gap - gap);
 			center = midpoint;
 		}
 
 		bool IsOut(const BoundingSphere& rhs) const {
-			Standard_Real dist = center.SquareDistance(rhs.center);
-			Standard_Real od = radius + gap + rhs.radius + rhs.gap;
+			const Standard_Real dist = center.SquareDistance(rhs.center);
+			const Standard_Real od = radius + gap + rhs.radius + rhs.gap;
 
 			return dist > (od * od);
 		}
 
 		Standard_Real SquareExtent() const {
-			const Standard_Real two_od = 2 * (radius + gap);
-			return two_od * two_od;
+			const Standard_Real od = radius + gap;
+			return 4 * od * od;
 		}
 	};
 

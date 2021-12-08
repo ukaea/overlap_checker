@@ -13,6 +13,8 @@ public:
 
 void configure_aixlog();
 
+std::string indexpair_to_string(size_t left, size_t right);
+
 bool int_of_string (const char *s, int &i, int base=0);
 bool size_t_of_string (const char *s, size_t &i, int base=0);
 

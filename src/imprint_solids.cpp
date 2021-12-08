@@ -38,30 +38,29 @@ imprint(document &doc)
 			return 1;
 		}
 
-		std::stringstream hi_lo;
-		hi_lo << std::setw(5) << first << '-' << std::left << second << std::right;
+		const auto hi_lo = indexpair_to_string((size_t)first, (size_t)second);
 
 		const auto res = perform_solid_imprinting(
 			doc.solid_shapes[(size_t)first], doc.solid_shapes[(size_t)second], 0.01);
 		switch(res.status) {
 		case imprint_status::failed:
-			LOG(ERROR) << hi_lo.str() << " failed to imprint\n";
+			LOG(ERROR) << hi_lo << " failed to imprint\n";
 			num_failed += 1;
 			// continue because we don't want to put these shapes back into
 			// the document!
 			continue;
 		case imprint_status::distinct:
-			LOG(DEBUG) << hi_lo.str() << " were mostly distinct\n";
+			LOG(DEBUG) << hi_lo << " were mostly distinct\n";
 			break;
 		case imprint_status::merge_into_shape:
 			LOG(INFO)
-				<< hi_lo.str() << " were imprinted, "
+				<< hi_lo << " were imprinted, "
 				<< "a volume of " << std::fixed << std::setprecision(2) << res.vol_common
 				<< "was merged into " << first << '\n';
 			break;
 		case imprint_status::merge_into_tool:
 			LOG(INFO)
-				<< hi_lo.str() << " were imprinted, "
+				<< hi_lo << " were imprinted, "
 				<< "a volume of " << std::fixed << std::setprecision(2) << res.vol_common
 				<< "was merged into " << second << '\n';
 			break;

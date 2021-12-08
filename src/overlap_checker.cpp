@@ -39,8 +39,7 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 	for (const auto fuzzy_value : state.fuzzy_values) {
 		if (!first) {
 			LOG(INFO)
-				<< std::setw(5) << hi << '-' << std::left << lo << std::right
-				<< " imprint failed with "
+				<< indexpair_to_string(hi, lo) << " imprint failed with "
 				<< '(' << result.num_filler_warnings << " filler and "
 				<< result.num_common_warnings << " common) "
 				<< "warnings, retrying with tolerance=" << fuzzy_value << '\n';
@@ -57,8 +56,7 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 
 	if (result.status == intersect_status::failed) {
 		LOG(WARNING)
-			<< std::setw(5) << hi << '-' << std::left << lo << std::right
-			<< " imprint failed with "
+			<< indexpair_to_string(hi, lo) << " imprint failed with "
 			<< '(' << result.num_filler_warnings << " filler and "
 			<< result.num_common_warnings << " common) "
 			<< "warnings\n";
@@ -255,17 +253,15 @@ main(int argc, char **argv)
 			}
 
 			size_t hi = output.hi, lo = output.lo;
-
-			std::stringstream hi_lo;
-			hi_lo << std::setw(5) << hi << '-' << std::left << lo << std::right;
+			const auto hi_lo = indexpair_to_string(hi, lo);
 
 			switch (output.result.status) {
 			case intersect_status::failed:
-				LOG(ERROR) << hi_lo.str() << " failed to classify overlap\n";
+				LOG(ERROR) << hi_lo << " failed to classify overlap\n";
 				num_failed += 1;
 				break;
 			case intersect_status::distinct:
-				LOG(DEBUG) << hi_lo.str() << " are distinct\n";
+				LOG(DEBUG) << hi_lo << " are distinct\n";
 				break;
 			case intersect_status::touching:
 				std::cout << hi << ',' << lo << ",touch\n";
@@ -285,12 +281,12 @@ main(int argc, char **argv)
 
 				if (vol_common > max_overlap) {
 					LOG(ERROR)
-						<< hi_lo.str() << " overlap by more than " << overlap_msg.str();
+						<< hi_lo << " overlap by more than " << overlap_msg.str();
 					std::cout << hi << ',' << lo << ",bad_overlap\n";
 					num_bad_overlaps += 1;
 				} else {
 					LOG(INFO)
-						<< hi_lo.str() << " overlap by less than " << overlap_msg.str();
+						<< hi_lo << " overlap by less than " << overlap_msg.str();
 					std::cout << hi << ',' << lo << ",overlap\n";
 					num_overlaps += 1;
 				}

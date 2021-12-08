@@ -38,10 +38,8 @@ merge_into(const document &doc, TopoDS_Compound &merged)
 			return 1;
 		}
 
-		std::stringstream hi_lo;
-		hi_lo << std::setw(5) << first << '-' << std::left << second << std::right;
-
-		LOG(INFO) << hi_lo.str() << " processing\n";
+		LOG(INFO)
+			<< indexpair_to_string((size_t)first, (size_t)second) << " processing\n";
 
 		boolean_op op{
 			BOPAlgo_COMMON,

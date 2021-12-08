@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <sstream>
 #include <string>
 
 #ifdef INCLUDE_TESTS
@@ -88,6 +89,14 @@ void configure_aixlog()
 	};
 
 	aixlog_sink = AixLog::Log::init<AixLog::SinkCallback>(aixlog_severity, callback);
+}
+
+std::string indexpair_to_string(size_t left, size_t right)
+{
+	std::stringstream ss;
+	ss.width(5);
+	ss << left << '-' << std::left << right;
+	return ss.str();
 }
 
 
