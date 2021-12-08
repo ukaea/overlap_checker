@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <sstream>
 #include <string>
 
 #ifdef INCLUDE_TESTS
@@ -21,13 +22,13 @@ static std::shared_ptr<AixLog::Sink> aixlog_sink;
 
 #define OPT_USAGE -3
 
-tool_argp_parser::tool_argp_parser(int expected_args) : cxx_argp::parser(expected_args)
+tool_argp_parser::tool_argp_parser(size_t expected_args) : cxx_argp::parser(expected_args)
 {
 	add_flags(ARGP_NO_HELP);
 	help_via_argp_flags = false;
 
 	add_option(
-		{"verbose", 'v', nullptr, 0, "Increase verbosity of output, can be repeated"},
+		{"verbose", 'v', nullptr, 0, "Increase verbosity of output, can be repeated", -2},
 		[](int, const char *, struct argp_state*) {
 			// go through severity levels:  Info => Debug => Trace
 			if (aixlog_severity > AixLog::Severity::debug){
@@ -44,7 +45,7 @@ tool_argp_parser::tool_argp_parser(int expected_args) : cxx_argp::parser(expecte
 		});
 
 	add_option(
-		{"quiet", 'q', nullptr, 0, "Decrease verbosity of output"},
+		{"quiet", 'q', nullptr, 0, "Decrease verbosity of output", -2},
 		[](int, const char *, struct argp_state*) {
 			aixlog_sink->filter.add_filter(
 				aixlog_severity = AixLog::Severity::warning);
@@ -52,7 +53,7 @@ tool_argp_parser::tool_argp_parser(int expected_args) : cxx_argp::parser(expecte
 		});
 
 	add_option(
-		{"help", 'h', nullptr, 0, "Give this help list"},
+		{"help", 'h', nullptr, 0, "Give this help list", -1},
 		[](int, const char *, struct argp_state* state) {
 			argp_state_help(state, stderr, ARGP_HELP_STD_HELP);
 			std::exit(0);
@@ -60,7 +61,7 @@ tool_argp_parser::tool_argp_parser(int expected_args) : cxx_argp::parser(expecte
 		});
 
 	add_option(
-		{"usage", OPT_USAGE, nullptr, 0, "Give a short usage message"},
+		{"usage", OPT_USAGE, nullptr, 0, "Give a short usage message", -1},
 		[](int, const char *, struct argp_state* state) {
 			argp_state_help(state, stderr, ARGP_HELP_STD_USAGE);
 			std::exit(0);
@@ -88,6 +89,14 @@ void configure_aixlog()
 	};
 
 	aixlog_sink = AixLog::Log::init<AixLog::SinkCallback>(aixlog_severity, callback);
+}
+
+std::string indexpair_to_string(size_t left, size_t right)
+{
+	std::stringstream ss;
+	ss.width(5);
+	ss << left << '-' << std::left << right;
+	return ss.str();
 }
 
 
@@ -140,7 +149,7 @@ bool int_of_string(const char *s, int &i, int base)
 	if (*s == '\0' || *end != '\0') {
 		return false;
 	}
-	i = l;
+	i = (int)l;
 	return true;
 }
 
@@ -159,7 +168,7 @@ bool size_t_of_string(const char *s, size_t &i, int base)
 	if (*s == '\0' || *end != '\0') {
 		return false;
 	}
-	i = l;
+	i = (size_t)l;
 	return true;
 }
 

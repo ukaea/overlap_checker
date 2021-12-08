@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #include <vector>
 #include <ostream>
 
@@ -25,7 +26,7 @@ struct document {
 	size_t count_invalid_shapes() const;
 
 	// only integer indexes supported at the moment, returns -1 if invalid
-	int lookup_solid(const std::string &str) const;
+	ssize_t lookup_solid(const std::string &str) const;
 };
 
 class BOPAlgo_PaveFiller;

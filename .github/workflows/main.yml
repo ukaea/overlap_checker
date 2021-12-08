@@ -9,15 +9,16 @@ jobs:
     - name: Install system packages
       run: |
         apt-get -y update
-        apt-get -y install git g++ cmake libocct-foundation-dev libocct-data-exchange-dev
+        apt-get -y install git git-lfs g++ cmake libocct-foundation-dev libocct-data-exchange-dev
     - uses: actions/checkout@v2
       with:
+        lfs: true
         submodules: recursive
     - name: Build
       run: |
         git submodule update
-        cmake build . -B build
+        cmake build . -B build -DWERROR=ON
         cmake --build build
     - name: Test
       run: |
-        env -C build ctest
+        env -C build ctest -V

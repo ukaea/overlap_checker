@@ -40,9 +40,9 @@
 
 static void
 assign_cstring(std::string &dst, const TCollection_ExtendedString &src) {
-	dst.resize(src.LengthOfCString());
+	dst.resize((size_t)src.LengthOfCString());
 	auto str = (char *)dst.data();
-	size_t len = src.ToUTF8CString(str);
+	size_t len = (size_t)src.ToUTF8CString(str);
 
 	if (len > dst.length()) {
 		LOG(FATAL)
@@ -61,12 +61,12 @@ assign_cstring(std::string &dst, const TCollection_ExtendedString &src) {
 
 static inline void
 assign_cstring(std::string &dst, const TCollection_AsciiString &src) {
-	dst.assign(src.ToCString(), src.Length());
+	dst.assign(src.ToCString(), (size_t)src.Length());
 }
 
 static inline void
 assign_cstring(std::string &dst, const TCollection_HAsciiString &src) {
-	dst.assign(src.ToCString(), src.Length());
+	dst.assign(src.ToCString(), (size_t)src.Length());
 }
 
 static bool
@@ -170,14 +170,15 @@ class collector {
 
 			doc.solid_shapes.emplace_back(ex.Current());
 
-			const auto ss = std::cout.precision();
+			const auto ss = std::cout.precision(1);
 			std::cout
 				<< label_num << ','
 				<< label_name << ','
-				<< std::setprecision(1) << volume << std::setprecision(ss) << ','
+				<< volume << ','
 				<< color << ','
 				<< material_name << ','
 				<< material_density << '\n';
+			std::cout.precision(ss);
 		}
 	}
 
@@ -346,19 +347,19 @@ main(int argc, char **argv)
 
 		tool_argp_parser argp(2);
 		argp.add_option(
-			{"min-volume", 1023, "volume", 0, min_volume_help.c_str()},
+			{"min-volume", 1023, "volume", 0, min_volume_help.c_str(), 0},
 			minimum_volume);
 		argp.add_option(
-			{"check-geometry", 1024, nullptr, 0, check_geometry_help.c_str()},
+			{"check-geometry", 1024, nullptr, 0, check_geometry_help.c_str(), 0},
 			check_geometry);
 		argp.add_option(
-			{"no-check-geometry", 1025, nullptr, OPTION_ALIAS},
+			{"no-check-geometry", 1025, nullptr, OPTION_ALIAS, nullptr, 0},
 			[&check_geometry](const char *) { check_geometry = false; return true; });
 		argp.add_option(
-			{"fix-geometry", 1026, nullptr, 0, fix_geometry_help.c_str()},
+			{"fix-geometry", 1026, nullptr, 0, fix_geometry_help.c_str(), 0},
 			fix_geometry);
 		argp.add_option(
-			{"no-fix-geometry", 1027, nullptr, OPTION_ALIAS},
+			{"no-fix-geometry", 1027, nullptr, OPTION_ALIAS, nullptr, 0},
 			[&fix_geometry](const char *) { fix_geometry = false; return true; });
 
 		if (!argp.parse(argc, argv, usage, doc)) {

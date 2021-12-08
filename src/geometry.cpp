@@ -1,4 +1,6 @@
 #include <cstdlib>
+#include <stdexcept>
+#include <sys/types.h>
 
 #ifdef INCLUDE_TESTS
 #include <catch2/catch_test_macros.hpp>
@@ -32,6 +34,7 @@
 
 #include "geometry.hpp"
 #include "utils.hpp"
+
 
 std::ostream&
 operator<<(std::ostream& str, TopAbs_ShapeEnum type)
@@ -103,7 +106,11 @@ volume_of_shape(const TopoDS_Shape& shape)
 {
 	GProp_GProps props;
 	BRepGProp::VolumeProperties(shape, props);
-	return props.Mass();
+	const double volume = props.Mass();
+	if (volume < 0) {
+		throw std::runtime_error("volume of shape less than zero");
+	}
+	return volume;
 }
 
 double
@@ -143,7 +150,7 @@ document::load_brep_file(const char* path)
 	}
 
 	LOG(DEBUG) << "expecting " << shape.NbChildren() << " solid shapes\n";
-	solid_shapes.reserve(shape.NbChildren());
+	solid_shapes.reserve((size_t)shape.NbChildren());
 
 	for (TopoDS_Iterator it(shape); it.More(); it.Next()) {
 		const auto &shp = it.Value();
@@ -231,7 +238,7 @@ document::count_invalid_shapes() const
 	return num_invalid;
 }
 
-int
+ssize_t
 document::lookup_solid(const std::string &str) const
 {
 	int idx = -1;
@@ -241,7 +248,7 @@ document::lookup_solid(const std::string &str) const
 	if (idx < 0 || (size_t)idx >= solid_shapes.size()) {
 		return -1;
 	}
-	return idx;
+	return (ssize_t)idx;
 }
 
 
