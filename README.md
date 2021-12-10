@@ -141,6 +141,30 @@ imprint_solids test_geometry.brep imprinted.brep < overlaps.csv
 merge_solids imprinted.brep merged.brep
 ```
 
+# Terminology
+
+There are a few terms that are used a lot and I'll try to describe
+them here:
+
+## Imprinting
+
+This ensures shapes that touch or intersect in any way both have
+equivalent features at the same place. For example if a rectangular
+face encompasses another smaller rectangular face, then that smaller
+face will be inscribed/imprinted into the larger face by removing the
+overlapping area, then adding 4 vertices and edges, and a face to the
+larger face, and stitching up the result.
+
+## Merging
+
+This ensures that "topologically identical" features (e.g. vertices in
+the same place) are recorded as being the same. This ensures that
+subsequent processing steps are able to easily identify these shared
+features. For example, when meshing, we'd want mesh vertices along a
+shared edge to be the same and meshers will ensure this if they know a
+single edge is used rather than two separate edges that happen to be
+at the same location.
+
 # Tool descriptions
 
 Note that all programs support passing the standard Unix `--help` (and
@@ -202,7 +226,7 @@ within this tolerance.
 ## `merge_solids`
 
 This tool glues shared parts of solids together. It works from
-verticies upto compound solid, merging any shared edges/faces as
+vertices upto compound solid, merging any shared edges/faces as
 appropriate. This is an intermediate step in our neutronics workflow
 and aims to produce output compatible with [occ_faceter][].
 
