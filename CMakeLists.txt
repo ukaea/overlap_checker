@@ -38,10 +38,14 @@ endif()
 find_path(OCC_INC "Standard_Version.hxx" HINTS "/usr/include/opencascade" REQUIRED)
 include_directories(SYSTEM ${OCC_INC})
 
-# pull in our external header-only libraries
+# pull in our external libraries
 include_directories(SYSTEM "aixlog/include")
 include_directories(SYSTEM "cxx_argp")
-add_subdirectory(Catch2)
+
+option(BUILD_TESTS "Whether to build tests" ON)
+if (BUILD_TESTS)
+  add_subdirectory(Catch2)
+endif()
 
 # place binaries in build rather than build/src
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})

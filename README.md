@@ -38,13 +38,17 @@ tests via:
 
 ```shell
 # set up and enter a build directory
-cmake build . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=true
+cmake build -B build
+cd build
 
 # compile the code
-cmake --build build
+cmake --build .
 
 # run tests
-meson test -v
+ctest
+
+# install executables
+cmake --install .
 ```
 
 ## *Experimental* Conda integration for Blueprint
