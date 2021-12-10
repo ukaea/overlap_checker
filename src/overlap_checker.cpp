@@ -1,6 +1,7 @@
 #include <cassert>
 #include <chrono>
 #include <iomanip>
+#include <ios>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -279,17 +280,27 @@ main(int argc, char **argv)
 					<< std::fixed << std::setprecision(2) << vol_common / min_vol * 100
 					<< "% of smaller shape\n";
 
+				const char * state = "overlap";
+
 				if (vol_common > max_overlap) {
 					LOG(ERROR)
 						<< hi_lo << " overlap by more than " << overlap_msg.str();
-					std::cout << hi << ',' << lo << ",bad_overlap\n";
+					state = "bad_overlap";
 					num_bad_overlaps += 1;
 				} else {
 					LOG(INFO)
 						<< hi_lo << " overlap by less than " << overlap_msg.str();
-					std::cout << hi << ',' << lo << ",overlap\n";
 					num_overlaps += 1;
 				}
+				auto ss = std::cout.precision(2);
+				std::cout
+					<< hi << ',' << lo << ','
+					<< state << ','
+					<< std::fixed
+					<< vol_common << ','
+					<< volumes[hi] << ','
+					<< volumes[lo] << '\n';
+				std::cout.precision(ss);
 				break;
 			}
 			}

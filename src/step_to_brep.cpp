@@ -151,7 +151,9 @@ class collector {
 
 		// add the solids to our list of things to do
 		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
-			const auto volume = volume_of_shape(shape);
+			LOG(TRACE) << "calculating volume of shape\n";
+			const auto volume = volume_of_shape(ex.Current());
+			LOG(TRACE) << "done calculating volume of shape\n";
 			if (volume < minimum_volume) {
 				if (volume < 0) {
 					n_negative_volume += 1;
@@ -174,7 +176,7 @@ class collector {
 			std::cout
 				<< label_num << ','
 				<< label_name << ','
-				<< volume << ','
+				<< std::fixed << volume << ','
 				<< color << ','
 				<< material_name << ','
 				<< material_density << '\n';
@@ -294,12 +296,12 @@ load_step_file(const char* path, collector &col) {
 		return false;
 	}
 
-	LOG(DEBUG) << "transferring into doc";
+	LOG(DEBUG) << "transferring into doc\n";
 
 	Handle(TDocStd_Document) doc;
 	app->NewDocument("MDTV-XCAF", doc);
 	if (!reader.Transfer(doc)) {
-		LOG(FATAL) << "failed to Transfer into document";
+		LOG(FATAL) << "failed to Transfer into document\n";
 		std::abort();
 	}
 
