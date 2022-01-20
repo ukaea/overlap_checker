@@ -141,7 +141,12 @@ document::load_brep_file(const char* path)
 		std::exit(1);
 	}
 
-	if (shape.ShapeType() != TopAbs_COMPOUND && shape.ShapeType() != TopAbs_COMPSOLID) {
+	switch(shape.ShapeType()) {
+	case TopAbs_COMPOUND:
+	case TopAbs_COMPSOLID:
+		break;
+
+	default:
 		LOG(FATAL)
 			<< "expected to get COMPOUND or COMPSOLID toplevel shape from brep file, not "
 			<< shape.ShapeType()
@@ -154,15 +159,19 @@ document::load_brep_file(const char* path)
 
 	for (TopoDS_Iterator it(shape); it.More(); it.Next()) {
 		const auto &shp = it.Value();
-		if (shp.ShapeType() != TopAbs_COMPSOLID && shp.ShapeType() != TopAbs_SOLID) {
+		switch (shp.ShapeType()) {
+		case TopAbs_COMPOUND:
+		case TopAbs_COMPSOLID:
+		case TopAbs_SOLID:
+			solid_shapes.push_back(shp);
+			break;
+		default:
 			LOG(FATAL)
 				<< "expecting shape to be a COMPSOLID or SOLID, not "
 				<< shp.ShapeType()
 				<< '\n';
 			std::exit(1);
 		}
-
-		solid_shapes.push_back(shp);
 	}
 }
 
