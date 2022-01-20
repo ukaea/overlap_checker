@@ -227,19 +227,24 @@ public:
 			fixer.SetPrecision(precision);
 			fixer.SetMaxTolerance(max_tolerance);
 			auto fixed = fixer.Perform();
-			LOG(INFO) << "shapefixer=" << fixed;
-			if (fixer.Status(ShapeExtend_DONE1)) LOG(INFO) << ", some free edges were fixed";
-			if (fixer.Status(ShapeExtend_DONE2)) LOG(INFO) << ", some free wires were fixed";
-			if (fixer.Status(ShapeExtend_DONE3)) LOG(INFO) << ", some free faces were fixed";
-			if (fixer.Status(ShapeExtend_DONE4)) LOG(INFO) << ", some free shells were fixed";
-			if (fixer.Status(ShapeExtend_DONE5)) LOG(INFO) << ", some free solids were fixed";
-			if (fixer.Status(ShapeExtend_DONE6)) LOG(INFO) << ", shapes in compound(s) were fixed";
-			LOG(INFO) << '\n';
-			shape = fixer.Shape();
+			if (fixed) {
+				auto &log = LOG(INFO)
+					<< "shapefixer=" << fixed;
+				if (fixer.Status(ShapeExtend_DONE1)) log << ", some free edges were fixed";
+				if (fixer.Status(ShapeExtend_DONE2)) log << ", some free wires were fixed";
+				if (fixer.Status(ShapeExtend_DONE3)) log << ", some free faces were fixed";
+				if (fixer.Status(ShapeExtend_DONE4)) log << ", some free shells were fixed";
+				if (fixer.Status(ShapeExtend_DONE5)) log << ", some free solids were fixed";
+				if (fixer.Status(ShapeExtend_DONE6)) log << ", shapes in compound(s) were fixed";
+				log << '\n';
+
+				shape = fixer.Shape();
+			}
 		}
 	}
 
 	void fix_wireframes(double precision, double max_tolerance) {
+		int nshape = 0;
 		for (auto &shape : doc.solid_shapes) {
 			ShapeFix_Wireframe fixer{shape};
 			fixer.SetPrecision(precision);
@@ -247,21 +252,31 @@ public:
 			fixer.ModeDropSmallEdges() = Standard_True;
 			auto small_res = fixer.FixSmallEdges();
 			auto gap_res = fixer.FixWireGaps();
+
+			if (!(small_res || gap_res)) {
+				continue;
+			}
+
+			auto &log = LOG(INFO)
+				<< "Fixing shape " << nshape++;
+
+			if (small_res) {
+				if (fixer.StatusSmallEdges(ShapeExtend_OK)) log << ", no small edges were found";
+				if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) log << ", some small edges were fixed";
+				if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) log << ", failed to fix some small edges";
+			}
+
+			if (gap_res) {
+				if (fixer.StatusWireGaps(ShapeExtend_OK)) log << ", no gaps were found";
+				if (fixer.StatusWireGaps(ShapeExtend_DONE1)) log << ", some gaps in 3D were fixed";
+				if (fixer.StatusWireGaps(ShapeExtend_DONE2)) log << ", some gaps in 2D were fixed";
+				if (fixer.StatusWireGaps(ShapeExtend_FAIL1)) log << ", failed to fix some gaps in 3D";
+				if (fixer.StatusWireGaps(ShapeExtend_FAIL2)) log << ", failed to fix some gaps in 2D";
+			}
+
+			log << '\n';
+
 			shape = fixer.Shape();
-
-			LOG(INFO) << "smalledge=" << small_res;
-			if (fixer.StatusSmallEdges(ShapeExtend_OK)) LOG(INFO) << "No small edges were found";
-			if (fixer.StatusSmallEdges(ShapeExtend_DONE1)) LOG(INFO) << "Some small edges were fixed";
-			if (fixer.StatusSmallEdges(ShapeExtend_FAIL1)) LOG(INFO) << "Failed to fix some small edges";
-			LOG(INFO) << '\n';
-
-			LOG(INFO) << " wiregaps=" << gap_res;
-			if (fixer.StatusWireGaps(ShapeExtend_OK)) LOG(INFO) << "No gaps were found";
-			if (fixer.StatusWireGaps(ShapeExtend_DONE1)) LOG(INFO) << "Some gaps in 3D were fixed";
-			if (fixer.StatusWireGaps(ShapeExtend_DONE2)) LOG(INFO) << "Some gaps in 2D were fixed";
-			if (fixer.StatusWireGaps(ShapeExtend_FAIL1)) LOG(INFO) << "Failed to fix some gaps in 3D";
-			if (fixer.StatusWireGaps(ShapeExtend_FAIL2)) LOG(INFO) << "Failed to fix some gaps in 2D";
-			LOG(INFO) << '\n';
 		}
 	}
 
@@ -386,12 +401,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	if (check_geometry) {
-		LOG(DEBUG) << "checking geometry\n";
-		if (!doc.check_geometry()) {
-			return 1;
-		}
-	}
+	doc.log_summary();
 
 	if (fix_geometry) {
 		LOG(DEBUG) << "fixing wireframes\n";
@@ -400,7 +410,12 @@ main(int argc, char **argv)
 		doc.fix_shapes(0.01, 0.00001);
 	}
 
-	doc.log_summary();
+	if (check_geometry) {
+		LOG(DEBUG) << "checking geometry\n";
+		if (!doc.check_geometry()) {
+			return 1;
+		}
+	}
 
 	doc.write_brep_file(path_out.c_str());
 

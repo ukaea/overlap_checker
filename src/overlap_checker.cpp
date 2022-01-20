@@ -36,6 +36,9 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 
 	intersect_result result;
 
+	std::stringstream msg;
+	msg << "CSI(" << hi << ", " << lo << ")";
+
 	bool first = true;
 	for (const auto fuzzy_value : state.fuzzy_values) {
 		if (!first) {
@@ -47,7 +50,7 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 		}
 
 		result = classify_solid_intersection(
-			shape, tool, fuzzy_value);
+			shape, tool, fuzzy_value, msg.str().c_str());
 
 		// try again with less fuzz
 		if (result.status != intersect_status::failed) {
@@ -245,6 +248,10 @@ main(int argc, char **argv)
 			worker_output output = map.get();
 			num_processed += 1;
 
+			// something weird is causing this to get set to hex formatting,
+			// reset it here
+			LOG(INFO) << std::dec;
+
 			if (report_when < std::chrono::steady_clock::now()) {
 				LOG(INFO)
 					<< "processed " << num_processed << " pairs ("
@@ -278,18 +285,18 @@ main(int argc, char **argv)
 				overlap_msg
 					<< max_common_volume_ratio * 100 << "%, "
 					<< std::fixed << std::setprecision(2) << vol_common / min_vol * 100
-					<< "% of smaller shape\n";
+					<< "% of smaller shape";
 
 				const char * state = "overlap";
 
 				if (vol_common > max_overlap) {
 					LOG(ERROR)
-						<< hi_lo << " overlap by more than " << overlap_msg.str();
+						<< hi_lo << " overlap by more than " << overlap_msg.str() << '\n';
 					state = "bad_overlap";
 					num_bad_overlaps += 1;
 				} else {
 					LOG(INFO)
-						<< hi_lo << " overlap by less than " << overlap_msg.str();
+						<< hi_lo << " overlap by less than " << overlap_msg.str() << '\n';
 					num_overlaps += 1;
 				}
 				auto ss = std::cout.precision(2);

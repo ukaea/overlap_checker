@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdlib>
 #include <set>
 #include <stdexcept>
@@ -270,8 +271,12 @@ collect_warnings(const Message_Report *report, int &warnings)
 }
 
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value)
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value,
+	const char*msg)
 {
+	using std::chrono::steady_clock;
+	using std::chrono::duration;
+
 	intersect_result result = {
 		intersect_status::failed,
 		// fuzzy value
@@ -297,14 +302,29 @@ intersect_result classify_solid_intersection(
 		filler.SetArguments(args);
 	}
 
+	LOG(TRACE)
+		<< msg << " PaveFiller configured\n";
+
+	auto t0 = steady_clock::now();
+
 	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
+
+	duration<double> dt = steady_clock::now() - t0;
+
+	LOG(TRACE)
+		<< msg << " PaveFiller.Perform  took " << dt.count() * 1000 << "ms\n";
 
 	{
 		Handle(Message_Report) report = filler.GetReport();
 		collect_warnings(report.get(), result.num_filler_warnings);
 		// this report is merged into the following reports
 		report->Clear();
+
+		if (result.num_filler_warnings) {
+			LOG(TRACE)
+				<< msg << " got " << result.num_filler_warnings << " filler warnings\n";
+		}
 	}
 
 	result.fuzzy_value = filler.FuzzyValue();
@@ -340,6 +360,9 @@ intersect_result classify_solid_intersection(
 		}
 		result.vol_cut12 = volume_of_shape(op.Shape());
 
+		LOG(TRACE)
+			<< msg << " PaveFiller.Perform overlap result\n";
+
 		result.status = intersect_status::overlap;
 		return result;
 	}
@@ -351,6 +374,9 @@ intersect_result classify_solid_intersection(
 		ex.Init(op.Shape(), TopAbs_VERTEX);
 		result.status = ex.More() ? intersect_status::touching : intersect_status::distinct;
 	}
+
+	LOG(TRACE)
+		<< msg << " PaveFiller.Perform sectioned\n";
 
 	return result;
 }
@@ -370,7 +396,7 @@ TEST_CASE("classify_solid_intersection") {
 	SECTION("two identical objects completely overlap") {
 		const auto s1 = cube_at(0, 0, 0, 10), s2 = cube_at(0, 0, 0, 10);
 
-		const auto result = classify_solid_intersection(s1, s2, 0.5);
+		const auto result = classify_solid_intersection(s1, s2, 0.5, "test");
 
 		REQUIRE(result.status == intersect_status::overlap);
 		CHECK(result.vol_common == Approx(10*10*10));
@@ -385,7 +411,7 @@ TEST_CASE("classify_solid_intersection") {
 			v1 = 10*10*10,
 			v2 = 6*6*6;
 
-		const auto result = classify_solid_intersection(s1, s2, 0.5);
+		const auto result = classify_solid_intersection(s1, s2, 0.5, "test");
 
 		REQUIRE(result.status == intersect_status::overlap);
 		CHECK(result.vol_common == Approx(v2));
@@ -396,7 +422,7 @@ TEST_CASE("classify_solid_intersection") {
 	SECTION("distinct objects don't overlap") {
 		const auto s1 = cube_at(0, 0, 0, 4), s2 = cube_at(5, 5, 5, 4);
 
-		const auto result = classify_solid_intersection(s1, s2, 0.5);
+		const auto result = classify_solid_intersection(s1, s2, 0.5, "test");
 
 		REQUIRE(result.status == intersect_status::distinct);
 		CHECK(result.vol_common == -1);
@@ -413,7 +439,7 @@ TEST_CASE("classify_solid_intersection") {
 
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(x, y, z, 5);
 
-		const auto result = classify_solid_intersection(s1, s2, 0.5);
+		const auto result = classify_solid_intersection(s1, s2, 0.5, "test");
 
 		REQUIRE(result.status == intersect_status::touching);
 	}
@@ -435,7 +461,7 @@ TEST_CASE("classify_solid_intersection") {
 
 		const auto s1 = cube_at(0, 0, 0, 5), s2 = cube_at(0, 0, z, 5);
 
-		const auto result = classify_solid_intersection(s1, s2, 0.5);
+		const auto result = classify_solid_intersection(s1, s2, 0.5, "test");
 
 		REQUIRE(result.status == expected);
 	}

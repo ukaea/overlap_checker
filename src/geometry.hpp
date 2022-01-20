@@ -93,7 +93,7 @@ struct intersect_result {
 };
 
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value);
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value, const char *msg);
 
 
 enum class imprint_status {
