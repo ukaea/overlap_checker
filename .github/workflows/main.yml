@@ -21,4 +21,4 @@ jobs:
         cmake --build build
     - name: Test
       run: |
-        env -C build ctest -V
+        env -C build ctest --output-on-failure
