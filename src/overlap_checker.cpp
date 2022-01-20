@@ -105,7 +105,9 @@ main(int argc, char **argv)
 
 		std::stringstream stream;
 
-		stream << "Parallelise over N[=" << num_parallel_jobs << "] threads";
+		stream
+			<< "Parallelise over N[=" << num_parallel_jobs << "] threads, leave N blank "
+			"to use all (" << std::thread::hardware_concurrency() << ") cores.";
 		auto help_num_par_jobs = stream.str();
 		stream = {};
 
@@ -125,9 +127,46 @@ main(int argc, char **argv)
 		auto help_max_common = stream.str();
 		stream = {};
 
+		auto parse_parallel = [&num_parallel_jobs](int, const char* arg, struct argp_state* state) {
+			if (!arg) {
+				num_parallel_jobs = std::thread::hardware_concurrency();
+				LOG(DEBUG)
+					<< "Using " << num_parallel_jobs << " threads for parallel computation\n";
+				return true;
+			}
+
+			// sanity checking user input
+			const long parallel_job_limit = 9999;
+			try {
+				size_t end;
+				auto n = std::stol(arg, &end);
+				if (arg[end] != '\0') {
+					argp_error(
+						state, "trailing characters after number in '%s'",
+						arg);
+					return false;
+				}
+				// make sure the user isn't doing anything silly
+				if (n < 1 || n > parallel_job_limit) {
+					argp_error(
+						state, "number of parallel jobs should be between 1 and %li, not %li",
+						parallel_job_limit, n);
+					return false;
+				}
+				num_parallel_jobs = unsigned(n);
+				return true;
+			} catch(std::exception &err) {
+				argp_error(
+					state, "not a valid number: '%s'",
+					arg);
+				return false;
+			}
+		};
+
 		tool_argp_parser argp(1);
 		argp.add_option(
-			{"jobs", 'j', "N", 0, help_num_par_jobs.c_str(), 0}, num_parallel_jobs);
+			{"jobs", 'j', "N", OPTION_ARG_OPTIONAL, help_num_par_jobs.c_str(), 0},
+			std::function{parse_parallel});
 		argp.add_option(
 			{"bbox-clearance", 1024, "C", 0, help_bbox_cl.c_str(), 0}, bbox_clearance);
 		argp.add_option(
@@ -142,21 +181,6 @@ main(int argc, char **argv)
 		const auto &args = argp.arguments();
 		assert(args.size() == 1);
 		path_in = args[0];
-
-		// when do we start complaining that the user is doing something silly
-		const unsigned parallel_job_limit = 1024;
-		if (num_parallel_jobs < 1 || num_parallel_jobs > parallel_job_limit) {
-			LOG(ERROR)
-				<< "Number of parallel jobs must be between 1 and "
-				<< parallel_job_limit << ".\n";
-			return 1;
-		}
-		unsigned max_parallel = std::thread::hardware_concurrency();
-		if (max_parallel && num_parallel_jobs > max_parallel * 2 + 4) {
-			LOG(WARNING)
-				<< "Requesting significantly more than the number of cores "
-				<< '(' << num_parallel_jobs << " > " << max_parallel << ") is unlikely to help\n";
-		}
 
 		for (const auto tolerance : imprint_tolerances) {
 			if (tolerance < 0) {

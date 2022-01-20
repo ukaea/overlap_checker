@@ -12,7 +12,7 @@ Python.
 Under Debian/Ubuntu these can be installed by running:
 
 ```shell
-apt-get install cmake catch2
+apt-get install cmake libocct-foundation-dev libocct-data-exchange-dev
 ```
 
 Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
@@ -21,7 +21,16 @@ Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
 Under ArchLinux the above dependencies would be installed via:
 
 ```shell
-pacman -S cmake catch2 opencascade
+pacman -S cmake opencascade
+```
+
+## Cloning
+
+When fetching the source code please ensure that sub-modules are also
+cloned, e.g. via:
+
+```shell
+git clone --recurse-submodules https://github.com/ukaea/overlap_checker.git
 ```
 
 ## Git Large File Storage (LFS)
@@ -31,24 +40,24 @@ suitable for tracking directly in Git. We're using Git LFS instead to
 track these so this must be installed first, if you want to run
 regression tests.  See https://git-lfs.github.com/ for details.
 
-## Compiling
+## Building
 
 Next we set up a build directory, compile the code, and run the unit
 tests via:
 
 ```shell
 # set up and enter a build directory
-cmake build -B build
-cd build
+mkdir build; cd build
+cmake ..
 
 # compile the code
-cmake --build .
+make -j6
 
 # run tests
 ctest
 
 # install executables
-cmake --install .
+make install
 ```
 
 ## *Experimental* Conda integration for Blueprint
@@ -121,24 +130,31 @@ workflows, they are:
  * `imprint_solids` removes any overlaps from solids, modifying
    veticies, edges and faces as appropriate.
 
-For example, to run the tools on the included `test_geometry.step`
-file you can do:
+A demo workflow is available in `tests/demo_workflow.sh`, and can be
+executed on a simple demo geometry as:
+
+```shell
+bash tests/demo_workflow.sh ../data/test_geometry.step
+```
+
+All output will be written into the current directory, a prefixed by
+`test_geometry`.  The workflow is similar to the following:
 
 ```shell
 # linearise all the shapes in the STEP file so they can be indexed consistantly by subsequent tools
-step_to_brep ../data/test_geometry.step test_geometry.brep > test_geometry.csv
+step_to_brep ../data/test_geometry.step test_geometry.brep > test_geometry-geometry.csv
 
-# perform overlap checking using 8 cores
-overlap_checker -j8 test_geometry.brep > overlaps.csv
+# perform overlap checking
+overlap_checker test_geometry.brep > test_geometry-overlaps.csv
 
 # collect overlapping solids and write to common.brep
-grep overlap overlaps.csv | overlap_collecter test_geometry.brep common.brep
+grep overlap test_geometry-overlaps.csv | overlap_collecter test_geometry.brep test_geometry-common.brep
 
 # perform imprinting
-imprint_solids test_geometry.brep imprinted.brep < overlaps.csv
+imprint_solids test_geometry.brep test_geometry-imprinted.brep < test_geometry-overlaps.csv
 
 # merging of imprinted solids
-merge_solids imprinted.brep merged.brep
+merge_solids test_geometry-imprinted.brep test_geometry-merged.brep
 ```
 
 # Tool descriptions

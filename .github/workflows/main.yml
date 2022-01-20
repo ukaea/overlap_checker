@@ -19,6 +19,9 @@ jobs:
         git submodule update
         cmake build . -B build -DWERROR=ON
         cmake --build build
+    - name: Install
+      run: |
+        cmake --install build
     - name: Test
       run: |
-        env -C build ctest -V
+        env -C build ctest --output-on-failure

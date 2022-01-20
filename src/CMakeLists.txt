@@ -38,6 +38,11 @@ if(BUILD_TESTS)
   add_test(NAME shape-merge
     COMMAND bash ${PROJECT_SOURCE_DIR}/tests/test_merge_solids.sh
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+
+  add_test(NAME demo-workflow
+    COMMAND bash ${PROJECT_SOURCE_DIR}/tests/demo_workflow.sh
+        ${PROJECT_SOURCE_DIR}/data/test_geometry.step
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
 endif()
 
 install(TARGETS
