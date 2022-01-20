@@ -12,7 +12,7 @@ Python.
 Under Debian/Ubuntu these can be installed by running:
 
 ```shell
-apt-get install cmake catch2
+apt-get install cmake libocct-foundation-dev libocct-data-exchange-dev
 ```
 
 Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
@@ -21,7 +21,16 @@ Note, using Ubuntu 21.04 is recommended to get OpenCascade 7.5, Ubuntu
 Under ArchLinux the above dependencies would be installed via:
 
 ```shell
-pacman -S cmake catch2 opencascade
+pacman -S cmake opencascade
+```
+
+## Cloning
+
+When fetching the source code please ensure that sub-modules are also
+cloned, e.g. via:
+
+```shell
+git clone --recurse-submodules https://github.com/ukaea/overlap_checker.git
 ```
 
 ## Git Large File Storage (LFS)
@@ -31,24 +40,24 @@ suitable for tracking directly in Git. We're using Git LFS instead to
 track these so this must be installed first, if you want to run
 regression tests.  See https://git-lfs.github.com/ for details.
 
-## Compiling
+## Building
 
 Next we set up a build directory, compile the code, and run the unit
 tests via:
 
 ```shell
 # set up and enter a build directory
-cmake build -B build
-cd build
+mkdir build; cd build
+cmake ..
 
 # compile the code
-cmake --build .
+make -j6
 
 # run tests
 ctest
 
 # install executables
-cmake --install .
+make install
 ```
 
 ## *Experimental* Conda integration for Blueprint
