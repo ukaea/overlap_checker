@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <set>
 #include <stdexcept>
 #include <sys/types.h>
 
@@ -186,6 +187,23 @@ document::write_brep_file(const char* path) const
 	}
 }
 
+static void
+report_analyzer_status(
+	BRepCheck_Analyzer analyzer, const TopoDS_Shape& shape,
+	std::map<BRepCheck_Status, int> &stats)
+{
+	const auto result = analyzer.Result(shape);
+	if (result) {
+		for (const auto status : result->Status()) {
+			stats[status] += 1;
+		}
+	}
+
+	for (TopoDS_Iterator it{shape}; it.More(); it.Next()) {
+		report_analyzer_status(analyzer, it.Value(), stats);
+	}
+}
+
 static bool
 is_shape_valid(int i, const TopoDS_Shape& shape)
 {
@@ -196,25 +214,13 @@ is_shape_valid(int i, const TopoDS_Shape& shape)
 
 	LOG(WARNING)
 		<< "shape " << i
-		<< " contains following errors ";
+		<< " contains following errors";
 
-	for (const auto status : checker.Result(shape)->Status()) {
-		if (status != BRepCheck_NoError) {
-			LOG(WARNING) << status;
-		}
-	}
-
-	for (TopoDS_Iterator it{shape}; it.More(); it.Next()) {
-		const auto &component = it.Value();
-
-		if (checker.IsValid(component)) {
-			continue;
-		}
-
-		for (const auto status : checker.Result(component)->Status()) {
-			if (status != BRepCheck_NoError) {
-				LOG(WARNING) << status;
-			}
+	std::map<BRepCheck_Status, int> stats;
+	report_analyzer_status(checker, shape, stats);
+	for (const auto pair : stats) {
+		if (pair.first != BRepCheck_NoError) {
+			LOG(WARNING) << ' ' << pair.first << ' ' << pair.second << " times";
 		}
 	}
 
