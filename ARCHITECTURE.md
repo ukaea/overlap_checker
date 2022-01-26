@@ -17,11 +17,11 @@ to support:
 
 # Terminology
 
- * A **solid**s is a 3D volume described by a set of faces, edges, and
+ * A **solid** is a 3D volume described by a set of faces, edges, and
    verticies.
- * Solids **intersect** when some point exists that is within either
-   solids or on the surface of either solid. It's useful to
-   distinguish between these cases:
+ * Solids **intersect** when some point exists that is within (or on
+   the surface of) both solids. It's useful to distinguish between
+   these cases:
    * Intersecting solids **touch** when the volume of intersection is
      empty. For example, a vertex of one solid lies on the face of
      another. Or, minimally, when two vertices are at the same
@@ -32,7 +32,7 @@ to support:
  * Solids are **distinct** when they do not intersect in any way. For
    example, their bounding boxes do not overlap. Note that this can
    get awkward to determine, e.g. a cylinder could have a torus around
-   it whose "hole" is larger diameter than the cylinder.
+   it whose "hole" has a larger diameter than the cylinder.
 
 # Model representation
 
@@ -47,11 +47,10 @@ chosen is to "linearise" the hierarchy of solids into a list, and
 maintain this linear order across related files and operations.
 
 For example, when checking for overlapping solids it's easy to
-determine which solids to iterate over, and when imprinting if we move
-part of one solid to another we just have to make sure we just write
-them into their appropriate indices. Material properties can be
-maintained in a separate database which just needs to be matched up
-again at the end.
+determine which solids to iterate over, and when imprinting any
+modified solid would be written back the same index in the BREP file.
+This allows metadata (e.g. material properties) to be maintained in a
+separate database which can be easily matched up again at the end.
 
 # OpenCascade
 
@@ -94,7 +93,7 @@ separate tool as more input formats are supported.
 # Overlap checking
 
 Once the solids have been linearised, it's a simple matter of
-performing $N(N-1)$ checks to determine which solids intersect with
+performing `N * (N-1)` checks to determine which solids intersect with
 each other. The cases we care about are:
 
  * distinct
@@ -124,7 +123,7 @@ with the original model to determine where they are.
 
 For a model to be used in (e.g.) neutronics modelling, we need to
 remove any overlaps between solids (`imprint_solids`) and merge
-(`merge_solids`) vertexes/edges/faces where appropriate.
+vertexes/edges/faces (`merge_solids`) where appropriate.
 
 Physical models want every point in space to either be in a single
 solid or be empty space. Any points within an intersection cause
@@ -135,8 +134,9 @@ Models also tend to assume that transitions between solids occur via
 shared faces. For example, two adjacent cubes should share adjacent
 faces to indicate they touch each other. Otherwise the model might
 interpret this as needing a particle to transition from solid, into
-air, then back into a solid, or maybe that the two solids can slide
-past each other.
+air, then back into a solid, or alternatively that the two solids are
+in contact with each other and should be able to slide past each
+other.
 
 ## Imprint stage
 
