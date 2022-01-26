@@ -1,13 +1,13 @@
-This document tries to describe the organising principles being the
+This document tries to describe the organising principles behind the
 overlap checker.
 
-It is inspired by the https://github.com/ukaea/parallel-preprocessor/
+These tools are inspired by the https://github.com/ukaea/parallel-preprocessor/
 previously written by Qingfeng Xia.
 
 # Users
 
 There are currently two groups of users these tools are being designed
-for:
+to support:
 
 1. CAD-CI, i.e. automatic validation of CAD models. Currently this is
    just making sure that models are self consistent, no significant
@@ -72,6 +72,12 @@ much more work than is necessary!
 
 # Tool functionality
 
+The project consists of several small tools that can be combined in a
+variety of ways to solve different tasks. These are described in the
+following sections, e.g. the CAD-CI users would just need an import,
+the overlap checker, and optionally the collector to help determine
+which solids are overlapping.
+
 # Import
 
 The source data needs to be imported and the solids linearised and
@@ -117,8 +123,8 @@ with the original model to determine where they are.
 # Model clean-up
 
 For a model to be used in (e.g.) neutronics modelling, we need to
-remove any overlaps between solids (**imprinting**) and merge
-vertexes/edges/faces where appropriate.
+remove any overlaps between solids (`imprint_solids`) and merge
+(`merge_solids`) vertexes/edges/faces where appropriate.
 
 Physical models want every point in space to either be in a single
 solid or be empty space. Any points within an intersection cause
