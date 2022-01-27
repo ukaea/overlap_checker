@@ -42,8 +42,7 @@ include_directories(SYSTEM ${OCC_INC})
 include_directories(SYSTEM "aixlog/include")
 include_directories(SYSTEM "cxx_argp")
 
-option(BUILD_TESTS "Whether to build tests" ON)
-if (BUILD_TESTS)
+if (BUILD_TESTING)
   add_subdirectory(Catch2)
 endif()
 

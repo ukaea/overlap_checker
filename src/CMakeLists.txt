@@ -28,7 +28,7 @@ add_executable(imprint_solids imprint_solids.cpp $<TARGET_OBJECTS:shared>)
 
 add_executable(merge_solids merge_solids.cpp salome/geom_gluer.cpp $<TARGET_OBJECTS:shared>)
 
-if(BUILD_TESTS)
+if(BUILD_TESTING)
   add_executable(test_runner geometry.cpp utils.cpp thread_pool.cpp)
   target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
   target_link_libraries(test_runner Catch2WithMain)

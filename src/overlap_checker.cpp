@@ -132,35 +132,34 @@ main(int argc, char **argv)
 				num_parallel_jobs = std::thread::hardware_concurrency();
 				LOG(DEBUG)
 					<< "Using " << num_parallel_jobs << " threads for parallel computation\n";
-				return true;
+				return 0;
 			}
 
 			// sanity checking user input
 			const long parallel_job_limit = 9999;
+			long n;
+			size_t end;
 			try {
-				size_t end;
-				auto n = std::stol(arg, &end);
-				if (arg[end] != '\0') {
-					argp_error(
-						state, "trailing characters after number in '%s'",
-						arg);
-					return false;
-				}
-				// make sure the user isn't doing anything silly
-				if (n < 1 || n > parallel_job_limit) {
-					argp_error(
-						state, "number of parallel jobs should be between 1 and %li, not %li",
-						parallel_job_limit, n);
-					return false;
-				}
-				num_parallel_jobs = unsigned(n);
-				return true;
+				n = std::stol(arg, &end);
 			} catch(std::exception &err) {
 				argp_error(
 					state, "not a valid number: '%s'",
 					arg);
-				return false;
 			}
+			if (arg[end] != '\0') {
+				argp_error(
+					state, "trailing characters after number in '%s'",
+					arg);
+			}
+			// make sure the user isn't doing anything silly
+			else if (n < 1 || n > parallel_job_limit) {
+				argp_error(
+					state, "number of parallel jobs should be between 1 and %li, not %li",
+					parallel_job_limit, n);
+			} else {
+				num_parallel_jobs = unsigned(n);
+			}
+			return 0;
 		};
 
 		tool_argp_parser argp(1);
