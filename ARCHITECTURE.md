@@ -134,9 +134,7 @@ Models also tend to assume that transitions between solids occur via
 shared faces. For example, two adjacent cubes should share adjacent
 faces to indicate they touch each other. Otherwise the model might
 interpret this as needing a particle to transition from solid, into
-air, then back into a solid, or alternatively that the two solids are
-in contact with each other and should be able to slide past each
-other.
+air, then back into a solid.
 
 ## Imprint stage
 
