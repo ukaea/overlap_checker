@@ -23,7 +23,7 @@ step_to_brep "$source" "$brep" > "$geometry"
 
 echo "checking for intersecting solids" 1>&2
 
-overlap_checker "$brep" > "$overlaps"
+overlap_checker -j1 "$brep" > "$overlaps"
 
 if grep -q overlap "$overlaps"; then
     echo "writing overlapping solds into $common" 1>&2
