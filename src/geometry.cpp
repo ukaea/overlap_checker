@@ -110,8 +110,8 @@ volume_of_shape(const TopoDS_Shape& shape)
 	const double volume = props.Mass();
 	if (volume < 0) {
 		LOG(WARNING)
-			<< "volume of shape less than zero ("
-			<< volume << ")\n";
+			<< "volume of shape (" << volume << ") less than zero, "
+			<< "taking the absolute value\n";
 	}
 	return fabs(volume);
 }
