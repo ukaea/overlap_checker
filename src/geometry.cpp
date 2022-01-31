@@ -1,5 +1,4 @@
 #include <cstdlib>
-#include <math.h>
 #include <stdexcept>
 #include <sys/types.h>
 
@@ -102,18 +101,22 @@ operator<<(std::ostream& str, BRepCheck_Status status)
 	return str << name;
 }
 
-double
-volume_of_shape(const TopoDS_Shape& shape)
+static double
+volume_of_shape_maybe_neg(const TopoDS_Shape& shape)
 {
 	GProp_GProps props;
 	BRepGProp::VolumeProperties(shape, props);
-	const double volume = props.Mass();
+	return props.Mass();
+}
+
+double
+volume_of_shape(const TopoDS_Shape& shape)
+{
+	const double volume = volume_of_shape_maybe_neg(shape);
 	if (volume < 0) {
-		LOG(WARNING)
-			<< "volume of shape (" << volume << ") less than zero, "
-			<< "taking the absolute value\n";
+ 		throw std::runtime_error("volume of shape less than zero");
 	}
-	return fabs(volume);
+	return volume;
 }
 
 double
@@ -330,7 +333,16 @@ intersect_result classify_solid_intersection(
 	TopExp_Explorer ex;
 	ex.Init(op.Shape(), TopAbs_SOLID);
 	if (ex.More()) {
-		result.vol_common = volume_of_shape(op.Shape());
+		// we expect the common volume to occasionally come back negative.
+		// OCCT appears to do this when the two solids have faces that are
+		// within the given tolerance/fuzzy value
+		result.vol_common = volume_of_shape_maybe_neg(op.Shape());
+		if (result.vol_common < 0) {
+			// returning failed here should cause the overlap checker will
+			// retry with a stricter tolerance, which tends to cause this
+			// error to disappear!
+			return result;
+		}
 
 		op.SetOperation(BOPAlgo_CUT);
 		op.Build();
