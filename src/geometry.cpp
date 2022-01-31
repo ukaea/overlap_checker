@@ -114,7 +114,7 @@ volume_of_shape(const TopoDS_Shape& shape)
 {
 	const double volume = volume_of_shape_maybe_neg(shape);
 	if (volume < 0) {
- 		throw std::runtime_error("volume of shape less than zero");
+		throw std::runtime_error("volume of shape less than zero");
 	}
 	return volume;
 }
