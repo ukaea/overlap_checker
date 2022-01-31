@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <math.h>
 #include <stdexcept>
 #include <sys/types.h>
 
@@ -108,9 +109,11 @@ volume_of_shape(const TopoDS_Shape& shape)
 	BRepGProp::VolumeProperties(shape, props);
 	const double volume = props.Mass();
 	if (volume < 0) {
-		throw std::runtime_error("volume of shape less than zero");
+		LOG(WARNING)
+			<< "volume of shape less than zero ("
+			<< volume << ")\n";
 	}
-	return volume;
+	return fabs(volume);
 }
 
 double
