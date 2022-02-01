@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
 #include <sys/types.h>
@@ -101,12 +102,18 @@ operator<<(std::ostream& str, BRepCheck_Status status)
 	return str << name;
 }
 
-double
-volume_of_shape(const TopoDS_Shape& shape)
+static double
+volume_of_shape_maybe_neg(const TopoDS_Shape& shape)
 {
 	GProp_GProps props;
 	BRepGProp::VolumeProperties(shape, props);
-	const double volume = props.Mass();
+	return props.Mass();
+}
+
+double
+volume_of_shape(const TopoDS_Shape& shape)
+{
+	const double volume = volume_of_shape_maybe_neg(shape);
 	if (volume < 0) {
 		throw std::runtime_error("volume of shape less than zero");
 	}
@@ -327,7 +334,10 @@ intersect_result classify_solid_intersection(
 	TopExp_Explorer ex;
 	ex.Init(op.Shape(), TopAbs_SOLID);
 	if (ex.More()) {
-		result.vol_common = volume_of_shape(op.Shape());
+		// OCCT (version 7.5) appears to occasionally come back with a
+		// negative volume. it appears to do this when the two solids have
+		// non-trivial faces that are within the given tolerance/fuzzy value
+		result.vol_common = volume_of_shape_maybe_neg(op.Shape());
 
 		op.SetOperation(BOPAlgo_CUT);
 		op.Build();
@@ -343,7 +353,25 @@ intersect_result classify_solid_intersection(
 		}
 		result.vol_cut12 = volume_of_shape(op.Shape());
 
-		result.status = intersect_status::overlap;
+		if (result.vol_common < 0) {
+			// ensure the this negative volume is "small", relative to the
+			// input shapes, as we only expect this to happen along the
+			// boundary of shapes
+			const double limit = std::min(result.vol_cut, result.vol_cut12) * 0.1;
+			if (limit < -result.vol_common) {
+				throw std::runtime_error("negative volume too large");
+			}
+
+			// until this is fixed upstream in OCCT, recording them as
+			// touching seems to be best. an alternative would be to fail, and
+			// let the caller retry with stricter tolerance (which tends to
+			// succeed). touching seems best as we later steps want to know
+			// which solids are close to each other and therefore need to
+			// considered during merging
+			result.status = intersect_status::touching;
+		} else {
+			result.status = intersect_status::overlap;
+		}
 		return result;
 	}
 
