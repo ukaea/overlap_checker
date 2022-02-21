@@ -286,8 +286,9 @@ main(int argc, char **argv)
 
 			if (report_when < std::chrono::steady_clock::now()) {
 				LOG(INFO)
-					<< "processed " << num_processed << " pairs ("
-					<< (num_processed * 100) / num_to_process << "%)\n";
+					<< "processed "
+					<< (num_processed * 100) / num_to_process << "% of pairs, "
+					<< (num_to_process - num_processed) << " remain\n";
 
 				report_when += reporting_interval;
 			}
