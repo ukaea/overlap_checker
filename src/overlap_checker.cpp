@@ -1,5 +1,6 @@
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -46,8 +47,16 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 				<< "warnings, retrying with tolerance=" << fuzzy_value << '\n';
 		}
 
-		result = classify_solid_intersection(
-			shape, tool, fuzzy_value);
+		try {
+			result = classify_solid_intersection(
+				shape, tool, fuzzy_value);
+		} catch (const std::exception &ex) {
+			LOG(FATAL)
+				<< indexpair_to_string(hi, lo)
+				<< " classifying intersection failed: "
+				<< ex.what() << '\n';
+			abort();
+		}
 
 		// try again with less fuzz
 		if (result.status != intersect_status::failed) {
