@@ -143,15 +143,17 @@ class collector {
 		get_color_info(label, color);
 		get_material_info(label, material_name, material_density);
 
-		TopoDS_Shape shape;
-		if (!XCAFDoc_ShapeTool::GetShape(label, shape)) {
+		TopoDS_Shape doc_shape;
+		if (!XCAFDoc_ShapeTool::GetShape(label, doc_shape)) {
 			LOG(ERROR) << "unable to get shape " << label_name << '\n';
 			std::abort();
 		}
 
 		// add the solids to our list of things to do
-		for (TopExp_Explorer ex{shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
+		for (TopExp_Explorer ex{doc_shape, TopAbs_SOLID}; ex.More(); ex.Next()) {
+			const TopoDS_Shape &shape = ex.Current();
 			const auto volume = volume_of_shape(shape);
+			LOG(TRACE) << "done calculating volume of shape\n";
 			if (volume < minimum_volume) {
 				if (volume < 0) {
 					n_negative_volume += 1;
@@ -168,13 +170,13 @@ class collector {
 				continue;
 			}
 
-			doc.solid_shapes.emplace_back(ex.Current());
+			doc.solid_shapes.emplace_back(shape);
 
 			const auto ss = std::cout.precision(1);
 			std::cout
 				<< label_num << ','
 				<< label_name << ','
-				<< volume << ','
+				<< std::fixed << volume << ','
 				<< color << ','
 				<< material_name << ','
 				<< material_density << '\n';
@@ -294,12 +296,12 @@ load_step_file(const char* path, collector &col) {
 		return false;
 	}
 
-	LOG(DEBUG) << "transferring into doc";
+	LOG(DEBUG) << "transferring into doc\n";
 
 	Handle(TDocStd_Document) doc;
 	app->NewDocument("MDTV-XCAF", doc);
 	if (!reader.Transfer(doc)) {
-		LOG(FATAL) << "failed to Transfer into document";
+		LOG(FATAL) << "failed to Transfer into document\n";
 		std::abort();
 	}
 
