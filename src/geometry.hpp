@@ -68,6 +68,9 @@ enum class intersect_status {
 	// something failed within OCCT, a different fuzzy value might help
 	failed,
 
+	// took too long to perform pave operation
+	timeout,
+
 	// null intersection
 	distinct,
 
@@ -90,10 +93,15 @@ struct intersect_result {
 
 	// only valid if result == overlap
 	double vol_common, vol_cut, vol_cut12;
+
+	// how long did the pavefiller operation take
+	double pave_time_seconds;
 };
 
+// pave time of zero disables timeout handling
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value);
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool,
+	double fuzzy_value, unsigned pave_time_millisecs=0);
 
 
 enum class imprint_status {

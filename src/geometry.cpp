@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
+#include <memory>
 #include <stdexcept>
 #include <sys/types.h>
 
@@ -28,6 +30,9 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_CompSolid.hxx>
 
+#include <Message_ProgressIndicator.hxx>
+#include <Message_ProgressRange.hxx>
+#include <Message_ProgressScope.hxx>
 #include <Message_Report.hxx>
 #include <Message_Gravity.hxx>
 
@@ -279,8 +284,50 @@ collect_warnings(const Message_Report *report, int &warnings)
 	}
 }
 
+class ProgressTimeout : public Message_ProgressIndicator {
+	typedef std::chrono::steady_clock clock;
+	std::chrono::time_point<clock> startedat_, expireat_;
+	std::unique_ptr<Message_ProgressScope> scope_;
+	bool expired_;
+
+public:
+	ProgressTimeout() : expired_{false} {}
+
+	void begin(BOPAlgo_Algo &algo, unsigned timeout_millisecs) {
+		startedat_ = clock::now();
+		if (timeout_millisecs > 0) {
+			scope_ = std::make_unique<Message_ProgressScope>(Start(), nullptr, 0);
+			expireat_ = startedat_ + std::chrono::milliseconds{timeout_millisecs};
+			algo.SetProgressIndicator(*scope_);
+		}
+	}
+
+	bool expired() const {
+		return expired_;
+	}
+
+	double duration_secs() const {
+		return std::chrono::duration<double>(clock::now() - startedat_).count();
+	}
+
+	void Show (const Message_ProgressScope &, const Standard_Boolean) override { }
+
+	Standard_Boolean UserBreak() override {
+		if (expired_) {
+			return true;
+		} else if (clock::now() < expireat_) {
+			return false;
+		} else {
+			expired_ = true;
+			return true;
+		}
+	}
+};
+
+
 intersect_result classify_solid_intersection(
-	const TopoDS_Shape& shape, const TopoDS_Shape& tool, double fuzzy_value)
+	const TopoDS_Shape& shape, const TopoDS_Shape& tool,
+	double fuzzy_value, unsigned pave_time_millisecs)
 {
 	intersect_result result = {
 		intersect_status::failed,
@@ -290,7 +337,12 @@ intersect_result classify_solid_intersection(
 		0, 0, 0,
 		// volumes
 		-1.0, -1.0, -1.0,
+		// pave time
+		-1.0,
 	};
+
+	// create here as they need a longer scope than the pave filler
+	ProgressTimeout timeout;
 
 	// explicitly construct a PaveFiller so we can reuse the work between
 	// operations, at a minimum we want to perform sectioning and getting any
@@ -307,8 +359,13 @@ intersect_result classify_solid_intersection(
 		filler.SetArguments(args);
 	}
 
+	timeout.begin(filler, pave_time_millisecs);
+
 	// this can be a very expensive call, e.g. 10+ seconds
 	filler.Perform();
+
+	result.pave_time_seconds = timeout.duration_secs();
+	result.fuzzy_value = filler.FuzzyValue();
 
 	{
 		Handle(Message_Report) report = filler.GetReport();
@@ -317,7 +374,10 @@ intersect_result classify_solid_intersection(
 		report->Clear();
 	}
 
-	result.fuzzy_value = filler.FuzzyValue();
+	if (timeout.expired()) {
+		result.status = intersect_status::timeout;
+		return result;
+	}
 
 	if (filler.HasErrors()) {
 		return result;
