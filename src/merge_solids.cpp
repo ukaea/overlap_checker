@@ -9,8 +9,8 @@
 #include <TopoDS_Iterator.hxx>
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Compound.hxx>
-#include "TopoDS_Solid.hxx"
-#include "TopoDS_Shape.hxx"
+#include <TopoDS_Solid.hxx>
+#include <TopoDS_Shape.hxx>
 
 #include "salome/geom_gluer.hxx"
 

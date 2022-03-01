@@ -1,5 +1,6 @@
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -8,6 +9,7 @@
 
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
+#include <OSD_Parallel.hxx>
 
 #include <cxx_argp_parser.h>
 #include <aixlog.hpp>
@@ -45,8 +47,16 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 				<< "warnings, retrying with tolerance=" << fuzzy_value << '\n';
 		}
 
-		result = classify_solid_intersection(
-			shape, tool, fuzzy_value);
+		try {
+			result = classify_solid_intersection(
+				shape, tool, fuzzy_value);
+		} catch (const std::exception &ex) {
+			LOG(FATAL)
+				<< indexpair_to_string(hi, lo)
+				<< " classifying intersection failed: "
+				<< ex.what() << '\n';
+			abort();
+		}
 
 		// try again with less fuzz
 		if (result.status != intersect_status::failed) {
@@ -86,6 +96,7 @@ main(int argc, char **argv)
 	configure_aixlog();
 
 	std::string path_in;
+	bool enable_intel_tbb = false;
 	unsigned num_parallel_jobs = 1;
 	double
 		bbox_clearance = 0.5,
@@ -172,6 +183,8 @@ main(int argc, char **argv)
 			{"imprint-tolerance", 1025, "T", 0, help_imp_tol.c_str(), 0}, imprint_tolerances);
 		argp.add_option(
 			{"max-common-volume-ratio", 1026, "R", 0, help_max_common.c_str(), 0}, max_common_volume_ratio);
+		argp.add_option(
+			{"enable-intel_tbb", 1027, 0, 0, "Enable OCCT use of Intel TBB, disabled by default as it gets in the way of our parallelism", -1}, enable_intel_tbb);
 
 		if (!argp.parse(argc, argv, usage, doc)) {
 			return 1;
@@ -202,6 +215,10 @@ main(int argc, char **argv)
 			return 1;
 		}
 	}
+
+	// flags to control OCCT's unwanted use of background threads
+	OSD_Parallel::SetUseOcctThreads (!enable_intel_tbb);
+	LOG(TRACE) << "OSD_Parallel::ToUseOcctThreads() = " << OSD_Parallel::ToUseOcctThreads() << "\n";
 
 	document doc;
 	doc.load_brep_file(path_in.c_str());
@@ -269,8 +286,9 @@ main(int argc, char **argv)
 
 			if (report_when < std::chrono::steady_clock::now()) {
 				LOG(INFO)
-					<< "processed " << num_processed << " pairs ("
-					<< (num_processed * 100) / num_to_process << "%)\n";
+					<< "processed "
+					<< (num_processed * 100) / num_to_process << "% of pairs, "
+					<< (num_to_process - num_processed) << " remain\n";
 
 				report_when += reporting_interval;
 			}
