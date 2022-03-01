@@ -22,6 +22,7 @@
 struct worker_state {
 	const document &doc;
 	std::vector<double> &fuzzy_values;
+	unsigned pave_time_millisecs;
 };
 
 struct worker_output {
@@ -49,7 +50,7 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 
 		try {
 			result = classify_solid_intersection(
-				shape, tool, fuzzy_value);
+				shape, tool, fuzzy_value, state.pave_time_millisecs);
 		} catch (const std::exception &ex) {
 			LOG(FATAL)
 				<< indexpair_to_string(hi, lo)
@@ -98,6 +99,7 @@ main(int argc, char **argv)
 	std::string path_in;
 	bool enable_intel_tbb = false;
 	unsigned num_parallel_jobs = 1;
+	unsigned pave_time_seconds = 60;
 	double
 		bbox_clearance = 0.5,
 		max_common_volume_ratio = 0.01;
@@ -136,6 +138,12 @@ main(int argc, char **argv)
 			<< "Imprinted volume with ratio <R[="
 			<< max_common_volume_ratio << "] is considered acceptable";
 		auto help_max_common = stream.str();
+		stream = {};
+
+		stream
+			<< "Amount of time, T[=" << pave_time_seconds << "] seconds, "
+			<< "to allow for computing one pair-wise intersection";
+		auto help_pave_time_seconds = stream.str();
 		stream = {};
 
 		auto parse_parallel = [&num_parallel_jobs](int, const char* arg, struct argp_state* state) {
@@ -185,6 +193,8 @@ main(int argc, char **argv)
 			{"max-common-volume-ratio", 1026, "R", 0, help_max_common.c_str(), 0}, max_common_volume_ratio);
 		argp.add_option(
 			{"enable-intel_tbb", 1027, 0, 0, "Enable OCCT use of Intel TBB, disabled by default as it gets in the way of our parallelism", -1}, enable_intel_tbb);
+		argp.add_option(
+			{"time-per-pair", 1028, "T", 0, help_pave_time_seconds.c_str(), -1}, pave_time_seconds);
 
 		if (!argp.parse(argc, argv, usage, doc)) {
 			return 1;
@@ -254,7 +264,7 @@ main(int argc, char **argv)
 		num_bad_overlaps = 0;
 
 	{
-		const struct worker_state state{doc, imprint_tolerances};
+		const struct worker_state state{doc, imprint_tolerances, pave_time_seconds * 1000};
 		asyncmap<worker_output> map;
 
 		for (size_t hi = 1; hi < doc.solid_shapes.size(); hi++) {
@@ -296,9 +306,19 @@ main(int argc, char **argv)
 			size_t hi = output.hi, lo = output.lo;
 			const auto hi_lo = indexpair_to_string(hi, lo);
 
+			if (output.result.pave_time_seconds > 1) {
+				LOG(TRACE) << hi_lo << " took " << output.result.pave_time_seconds << " seconds to pave\n";
+			}
+
 			switch (output.result.status) {
 			case intersect_status::failed:
 				LOG(ERROR) << hi_lo << " failed to classify overlap\n";
+				num_failed += 1;
+				break;
+			case intersect_status::timeout:
+				LOG(ERROR)
+					<< hi_lo << " failed to classify overlap, "
+					<< "due to timeout of " << pave_time_seconds << " seconds\n";
 				num_failed += 1;
 				break;
 			case intersect_status::distinct:
@@ -318,16 +338,19 @@ main(int argc, char **argv)
 				overlap_msg
 					<< max_common_volume_ratio * 100 << "%, "
 					<< std::fixed << std::setprecision(2) << vol_common / min_vol * 100
-					<< "% of smaller shape\n";
+					<< "% of smaller shape. " << std::setprecision(1)
+					<< "vol_" << hi << '=' << volumes[hi]
+					<< ", vol_" << lo << '=' << volumes[lo]
+					<< ", common=" << vol_common;
 
 				if (vol_common > max_overlap) {
 					LOG(ERROR)
-						<< hi_lo << " overlap by more than " << overlap_msg.str();
+						<< hi_lo << " overlap by more than " << overlap_msg.str() << '\n';
 					std::cout << hi << ',' << lo << ",bad_overlap\n";
 					num_bad_overlaps += 1;
 				} else {
 					LOG(INFO)
-						<< hi_lo << " overlap by less than " << overlap_msg.str();
+						<< hi_lo << " overlap by less than " << overlap_msg.str() << '\n';
 					std::cout << hi << ',' << lo << ",overlap\n";
 					num_overlaps += 1;
 				}
