@@ -735,4 +735,56 @@ TEST_CASE("perform_solid_imprinting") {
 	}
 }
 
+#include "salome/geom_gluer.hxx"
+
+static inline size_t shape_count_uniq(TopoDS_Shape shape, TopAbs_ShapeEnum what)
+{
+	TopTools_MapOfShape seen;
+	for (TopExp_Explorer ex{shape, what}; ex.More(); ex.Next()) {
+		seen.Add(ex.Current());
+	}
+	return (size_t)seen.Size();
+}
+
+TEST_CASE("salome_glue_shape") {
+	using Catch::Approx;
+
+	SECTION("two cubes with coincident face") {
+		const auto solids = {
+			cube_at(0, 0, 0, 1),
+			cube_at(1, 0, 0, 1),
+		};
+
+		TopoDS_Compound input;
+		TopoDS_Builder builder;
+		builder.MakeCompound(input);
+		for (const auto &s : solids) {
+			// sanity check starting point
+			CHECK(s.ShapeType() == TopAbs_SOLID);
+			CHECK(volume_of_shape(s) == Approx(1));
+			CHECK(shape_count_uniq(s, TopAbs_VERTEX) == 8);
+			CHECK(shape_count_uniq(s, TopAbs_EDGE) == 12);
+			CHECK(shape_count_uniq(s, TopAbs_FACE) == 6);
+
+			builder.Add(input, s);
+		}
+
+		// sanity check input to gluer
+		CHECK(shape_count_uniq(input, TopAbs_VERTEX) == 16);
+		CHECK(shape_count_uniq(input, TopAbs_EDGE) == 24);
+		CHECK(shape_count_uniq(input, TopAbs_FACE) == 12);
+		CHECK(shape_count_uniq(input, TopAbs_SOLID) == 2);
+		CHECK(volume_of_shape(input) == Approx(2));
+
+		TopoDS_Shape result = salome_glue_shape(input, 1e-9);
+
+		// should have merged 1 face, 4 verts, and 4 edges
+		CHECK(shape_count_uniq(result, TopAbs_VERTEX) == 12);
+		CHECK(shape_count_uniq(result, TopAbs_EDGE) == 20);
+		CHECK(shape_count_uniq(result, TopAbs_FACE) == 11);
+		CHECK(shape_count_uniq(input, TopAbs_SOLID) == 2);
+		CHECK(volume_of_shape(result) == Approx(2));
+	}
+}
+
 #endif
