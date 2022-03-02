@@ -750,7 +750,7 @@ TEST_CASE("salome_glue_shape") {
 	using Catch::Approx;
 
 	SECTION("two cubes with coincident face") {
-		const auto solids = {
+		const TopoDS_Shape solids[] = {
 			cube_at(0, 0, 0, 1),
 			cube_at(1, 0, 0, 1),
 		};
