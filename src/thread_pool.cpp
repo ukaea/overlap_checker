@@ -47,8 +47,6 @@ void thread_pool::submit(std::function<void(void)> task)
 	std::unique_lock<std::mutex> mlock(mutex);
 
 	queue.emplace_back(task);
-	mlock.unlock();
-
 	cond.notify_one();
 }
 

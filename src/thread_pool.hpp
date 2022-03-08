@@ -61,9 +61,7 @@ public:
 
 			std::unique_lock<std::mutex> mlock(mutex);
 			num_inflight -= 1;
-			mlock.unlock();
-
-			cond.notify_one();
+			cond.notify_all();
 		});
 
 		std::unique_lock<std::mutex> mlock(mutex);
@@ -81,7 +79,8 @@ public:
 template<typename T>
 class asyncmap {
 	std::mutex mutex;
-	std::condition_variable cond;
+	std::condition_variable cond_res;
+	std::condition_variable cond_done;
 	std::deque<T> results;
 
 	size_t num_inflight;
@@ -98,7 +97,7 @@ public:
 	void wait() {
 		std::unique_lock<std::mutex> mlock(mutex);
 		while(num_inflight > 0) {
-			cond.wait(mlock);
+			cond_done.wait(mlock);
 		}
 	}
 
@@ -109,9 +108,10 @@ public:
 			std::unique_lock<std::mutex> mlock(mutex);
 			num_inflight -= 1;
 			results.emplace_back(result);
-			mlock.unlock();
-
-			cond.notify_one();
+			cond_res.notify_one();
+			if (num_inflight == 0) {
+				cond_done.notify_all();
+			}
 		});
 
 		std::unique_lock<std::mutex> mlock(mutex);
@@ -126,7 +126,7 @@ public:
 	T get() {
 		std::unique_lock<std::mutex> mlock(mutex);
 		while (results.empty()) {
-			cond.wait(mlock);
+			cond_res.wait(mlock);
 		}
 		auto result = results.front();
 		results.pop_front();
