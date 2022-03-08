@@ -101,7 +101,8 @@ struct intersect_result {
 // pave time of zero disables timeout handling
 intersect_result classify_solid_intersection(
 	const TopoDS_Shape& shape, const TopoDS_Shape& tool,
-	double fuzzy_value, unsigned pave_time_millisecs=0);
+	double fuzzy_value, unsigned pave_time_millisecs,
+	const char *msg);
 
 
 enum class imprint_status {

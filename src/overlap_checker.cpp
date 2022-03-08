@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <iomanip>
+#include <ios>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -38,6 +39,9 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 
 	intersect_result result;
 
+	std::stringstream msg;
+	msg << "CSI(" << hi << ", " << lo << ")";
+
 	bool first = true;
 	for (const auto fuzzy_value : state.fuzzy_values) {
 		if (!first) {
@@ -50,7 +54,8 @@ shape_classifier(const worker_state& state, size_t hi, size_t lo)
 
 		try {
 			result = classify_solid_intersection(
-				shape, tool, fuzzy_value, state.pave_time_millisecs);
+				shape, tool, fuzzy_value, state.pave_time_millisecs,
+				msg.str().c_str());
 		} catch (const std::exception &ex) {
 			LOG(FATAL)
 				<< indexpair_to_string(hi, lo)
@@ -294,6 +299,10 @@ main(int argc, char **argv)
 			worker_output output = map.get();
 			num_processed += 1;
 
+			// something weird is causing this to get set to hex formatting,
+			// reset it here
+			LOG(INFO) << std::dec;
+
 			if (report_when < std::chrono::steady_clock::now()) {
 				LOG(INFO)
 					<< "processed "
@@ -343,17 +352,27 @@ main(int argc, char **argv)
 					<< ", vol_" << lo << '=' << volumes[lo]
 					<< ", common=" << vol_common;
 
+				const char * state = "overlap";
+
 				if (vol_common > max_overlap) {
 					LOG(ERROR)
 						<< hi_lo << " overlap by more than " << overlap_msg.str() << '\n';
-					std::cout << hi << ',' << lo << ",bad_overlap\n";
+					state = "bad_overlap";
 					num_bad_overlaps += 1;
 				} else {
 					LOG(INFO)
 						<< hi_lo << " overlap by less than " << overlap_msg.str() << '\n';
-					std::cout << hi << ',' << lo << ",overlap\n";
 					num_overlaps += 1;
 				}
+				auto ss = std::cout.precision(2);
+				std::cout
+					<< hi << ',' << lo << ','
+					<< state << ','
+					<< std::fixed
+					<< vol_common << ','
+					<< volumes[hi] << ','
+					<< volumes[lo] << '\n';
+				std::cout.precision(ss);
 				break;
 			}
 			}
