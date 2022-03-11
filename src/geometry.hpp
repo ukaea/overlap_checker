@@ -27,6 +27,8 @@ struct document {
 
 	// only integer indexes supported at the moment, returns -1 if invalid
 	ssize_t lookup_solid(const std::string &str) const;
+
+	TopoDS_Shape create_graveyard() const;
 };
 
 class BOPAlgo_PaveFiller;

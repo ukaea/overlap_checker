@@ -19,6 +19,12 @@
 
 #include <BRepTools.hxx>
 #include <BRep_Builder.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
+
+#include <gp_Pnt.hxx>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
 
 #include <BRepCheck_Analyzer.hxx>
 
@@ -278,6 +284,31 @@ document::lookup_solid(const std::string &str) const
 	return (ssize_t)idx;
 }
 
+TopoDS_Shape
+document::create_graveyard() const
+{
+	Bnd_Box bb;
+	for (const auto& shape : solid_shapes) {
+		BRepBndLib::Add(shape, bb);
+	}
+
+	auto mn = bb.CornerMin().XYZ();
+	auto mx = bb.CornerMax().XYZ();
+
+	// calculate gaps from solid bounds out to inner & outer graveyard boxes
+	const auto d1 = (mx - mn) * 0.2;
+	const auto d2 = (mx - mn) * 0.4;
+
+	const auto inner = BRepPrimAPI_MakeBox(gp_Pnt{mn - d1}, gp_Pnt{mx + d1}).Shape();
+	const auto outer = BRepPrimAPI_MakeBox(gp_Pnt{mn - d2}, gp_Pnt{mx + d2}).Shape();
+
+	BRepAlgoAPI_Cut bop{outer, inner};
+	if (bop.HasErrors()) {
+		throw std::runtime_error("unable to perform cut between two boxes");
+	}
+
+	return bop.Shape();
+}
 
 static inline bool
 collect_warnings(const Message_Report *report, int &warnings)
@@ -470,8 +501,6 @@ intersect_result classify_solid_intersection(
 }
 
 #ifdef INCLUDE_TESTS
-#include <BRepPrimAPI_MakeBox.hxx>
-
 static inline TopoDS_Shape
 cube_at(double x, double y, double z, double length)
 {
@@ -669,8 +698,6 @@ imprint_result perform_solid_imprinting(
 }
 
 #ifdef INCLUDE_TESTS
-#include <BRepPrimAPI_MakeBox.hxx>
-
 TEST_CASE("perform_solid_imprinting") {
 	using Catch::Approx;
 
