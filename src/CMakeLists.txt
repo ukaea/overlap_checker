@@ -40,7 +40,7 @@ if(BUILD_TESTING)
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
 
   add_test(NAME demo-workflow
-    COMMAND bash ${PROJECT_SOURCE_DIR}/tests/demo_workflow.sh
+    COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/check_nothing_overlaps.sh
         ${PROJECT_SOURCE_DIR}/data/test_geometry.step
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
 endif()
