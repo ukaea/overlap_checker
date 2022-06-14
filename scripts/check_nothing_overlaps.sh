@@ -24,11 +24,11 @@ EOF
 
 # command line processing
 check_exists=1
-num_threads=
+oc_threads=-j
 
 while getopts "hfj:" arg; do
   case "$arg" in
-    j) num_threads="$OPTARG" ;;
+    j) oc_threads="-j$OPTARG" ;;
     f) check_exists= ;;
     h) usage ;;
     *) usage 1 ;;
@@ -69,24 +69,16 @@ if [ "$check_exists" ]; then
       fail=1
     fi
   done
-  if [ "$fail" ]; then
+  if [ "${fail-}" ]; then
     exit 1
   fi
-  unset fail
 fi
 
 echo "1/5: Linearising solids into $brep" 1>&2
 step_to_brep "$source" "$brep" > "$geometry"
 
-# assemble optional args
-if [ -n "$num_threads" ]; then
-  opts="-j$num_threads"
-else
-  opts="-j"
-fi
-
 echo "2/5: Checking for intersecting solids" 1>&2
-overlap_checker "$brep" $opts > "$overlaps"
+overlap_checker "$brep" "$oc_threads" > "$overlaps"
 
 if grep -q overlap "$overlaps"; then
   echo "3/5: Writing overlapping solds into $common" 1>&2
