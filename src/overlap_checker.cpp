@@ -11,6 +11,7 @@
 #include <BRepBndLib.hxx>
 #include <Bnd_OBB.hxx>
 #include <OSD_Parallel.hxx>
+#include <OSD_ThreadPool.hxx>
 
 #include <cxx_argp_parser.h>
 #include <aixlog.hpp>
@@ -232,8 +233,21 @@ main(int argc, char **argv)
 	}
 
 	// flags to control OCCT's unwanted use of background threads
-	OSD_Parallel::SetUseOcctThreads (!enable_intel_tbb);
-	LOG(TRACE) << "OSD_Parallel::ToUseOcctThreads() = " << OSD_Parallel::ToUseOcctThreads() << "\n";
+	if (enable_intel_tbb) {
+		OSD_Parallel::SetUseOcctThreads (false);
+	} else {
+		OSD_Parallel::SetUseOcctThreads (true);
+
+		// disable OCCT thread pool, reinitialising if needed
+		auto pool = OSD_ThreadPool::DefaultPool(1);
+		if (pool->NbThreads() != 1) {
+			pool->Init(1);
+		}
+	}
+
+	LOG(TRACE)
+		<< "OSD_Parallel::ToUseOcctThreads() = " << OSD_Parallel::ToUseOcctThreads() << "\n"
+		<< "OSD_ThreadPool::NbThreads() = " << OSD_ThreadPool::DefaultPool()->NbThreads() << "\n";
 
 	document doc;
 	doc.load_brep_file(path_in.c_str());
