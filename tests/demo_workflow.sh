@@ -7,6 +7,8 @@ if [ ! -f "${1-}" ]; then
     exit 1
 fi
 
+PATH=.:$PATH
+
 source="$1"
 base="${source##*/}"
 base="${base%.*}"
