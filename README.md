@@ -40,6 +40,20 @@ suitable for tracking directly in Git. We're using Git LFS instead to
 track these so this must be installed first, if you want to run
 regression tests.  See https://git-lfs.github.com/ for details.
 
+Under Ubuntu 22.04, git-lfs can be installed via:
+
+```shell
+apt-get install git-lfs
+git lfs install
+```
+
+Then to get the test data:
+
+```shell
+git lfs pull
+```
+
+
 ## Building
 
 Next we set up a build directory, compile the code, and run the unit
