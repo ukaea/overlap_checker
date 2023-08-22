@@ -28,6 +28,8 @@ add_executable(imprint_solids imprint_solids.cpp $<TARGET_OBJECTS:shared>)
 
 add_executable(merge_solids merge_solids.cpp salome/geom_gluer.cpp $<TARGET_OBJECTS:shared>)
 
+add_executable(create_graveyard create_graveyard.cpp $<TARGET_OBJECTS:shared>)
+
 if(BUILD_TESTING)
   add_executable(test_runner geometry.cpp utils.cpp thread_pool.cpp salome/geom_gluer.cpp)
   target_compile_definitions(test_runner PUBLIC -DINCLUDE_TESTS)
@@ -52,4 +54,5 @@ install(TARGETS
   overlap_collecter
   imprint_solids
   merge_solids
+  create_graveyard
   )
