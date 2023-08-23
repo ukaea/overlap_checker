@@ -117,7 +117,7 @@ export CC=clang CXX=clang++
 
 # Running
 
-Three small tools are provided that can be used in different
+Several small tools are provided that can be used in different
 workflows, they are:
 
  * `step_to_brep` extracts the solid shapes out of a STEP file and
@@ -128,7 +128,11 @@ workflows, they are:
  * `overlap_collecter` collect intersections between solids and write
    out to BREP file.
  * `imprint_solids` removes any overlaps from solids, modifying
-   veticies, edges and faces as appropriate.
+   verticies, edges and faces as appropriate.
+ * `merge_solids` merges any faces, edges and vertices which are shared
+   between touching solids.
+ * `create_graveyard` adds a box around the geometry (marking the outer
+   bounds where neutronics particles can be terminated).
 
 A demo workflow is available in `tests/demo_workflow.sh`, and can be
 executed on a simple demo geometry as:
@@ -137,7 +141,7 @@ executed on a simple demo geometry as:
 bash tests/demo_workflow.sh ../data/test_geometry.step
 ```
 
-All output will be written into the current directory, a prefixed by
+All output will be written into the current directory, prefixed by
 `test_geometry`.  The workflow is similar to the following:
 
 ```shell
@@ -155,6 +159,9 @@ imprint_solids test_geometry.brep test_geometry-imprinted.brep < test_geometry-o
 
 # merging of imprinted solids
 merge_solids test_geometry-imprinted.brep test_geometry-merged.brep
+
+# add graveyard
+create_graveyard test_geometry-merged.brep test_geometry-with-graveyard.brep
 ```
 
 # Terminology
@@ -246,8 +253,14 @@ vertices upto compound solid, merging any shared edges/faces as
 appropriate. This is an intermediate step in our neutronics workflow
 and aims to produce output compatible with [occ_faceter][].
 
-[pyvenv]: https://docs.python.org/3/tutorial/venv.html
 [occ_faceter]: https://github.com/makeclean/occ_faceter/
+
+## `create_graveyard`
+
+This tool adds a 'graveyard' volume to the geometry.  The graveyard is
+a box which contains all the other geometry, and marks outer bounds where
+neutronics particles can be terminated.
+
 
 
 # File formats
