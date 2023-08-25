@@ -16,6 +16,7 @@ overlaps="$base-overlaps.csv"
 common="$base-common.brep"
 imprinted="$base-imprinted.brep"
 merged="$base-merged.brep"
+with_graveyard="$base-with-graveyard.brep"
 
 echo "linearising solids into $brep" 1>&2
 
@@ -35,3 +36,6 @@ imprint_solids "$brep" "$imprinted" < "$overlaps"
 
 echo "merging faces, edges and verticies and writing to $merged" 1>&2
 merge_solids "$imprinted" "$merged"
+
+echo "add graveyard" 1>&2
+create_graveyard "$merged" "$with_graveyard"

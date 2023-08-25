@@ -179,3 +179,10 @@ that overlap. It is therefore important that this stage is run after
 imprinting to allow touching faces/edges/vertices to be merged.
 
 [GEOMAlgo_Gluer2]: https://docs.salome-platform.org/latest/tui/GEOM/classGEOMAlgo__Gluer2.html
+
+## Graveyard creation
+
+For neutronics modelling, there is the additional option to add a
+'graveyard' volume to the geometry (`create_graveyard`).  The graveyard is
+a box which contains all the other geometry, and marks outer bounds where
+particles can be terminated.
