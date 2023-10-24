@@ -38,6 +38,8 @@ endif()
 find_path(OCC_INC "Standard_Version.hxx" HINTS "/usr/include/opencascade" REQUIRED)
 include_directories(SYSTEM ${OCC_INC})
 
+find_path(OCC_LIB "")
+link_directories(SYSTEM ${OCC_LIB})
 # pull in our external libraries
 include_directories(SYSTEM "aixlog/include")
 include_directories(SYSTEM "cxx_argp")
